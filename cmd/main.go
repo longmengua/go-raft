@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"go-raft/api"
-	"go-raft/raft"
+	raftconcurrent "go-raft/raft_concurrent"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -23,8 +23,8 @@ func main() {
 	logger.GetLogger("raft").SetLevel(logger.WARNING)
 
 	nh, err := dragonboat.NewNodeHost(config.NodeHostConfig{
-		WALDir:         raft.FileDir,
-		NodeHostDir:    raft.FileDir,
+		WALDir:         raftconcurrent.FileDir,
+		NodeHostDir:    raftconcurrent.FileDir,
 		RTTMillisecond: 200,
 		RaftAddress:    raftAddress,
 	})
@@ -32,11 +32,27 @@ func main() {
 		log.Fatalf("failed to create nodehost: %v", err)
 	}
 
-	err = nh.StartReplica(
+	// err = nh.StartReplica(
+	// 	map[uint64]string{nodeID: raftAddress},
+	// 	false,
+	// 	func(clusterID, nodeID uint64) statemachine.IStateMachine {
+	// 		return raft.NewAssetRaftMachine()
+	// 	},
+	// 	config.Config{
+	// 		ReplicaID: nodeID,
+	// 		// NodeID:             nodeID,
+	// 		ElectionRTT:        10,
+	// 		HeartbeatRTT:       1,
+	// 		CheckQuorum:        true,
+	// 		SnapshotEntries:    10,
+	// 		CompactionOverhead: 5,
+	// 	},
+	// )
+	err = nh.StartConcurrentReplica(
 		map[uint64]string{nodeID: raftAddress},
 		false,
-		func(clusterID, nodeID uint64) statemachine.IStateMachine {
-			return raft.NewAssetRaftMachine()
+		func(clusterID, nodeID uint64) statemachine.IConcurrentStateMachine {
+			return raftconcurrent.NewAssetRaftConcurrentMachine()
 		},
 		config.Config{
 			ReplicaID: nodeID,

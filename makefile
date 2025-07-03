@@ -30,6 +30,10 @@ GEN_GRPC := $(BIN_DIR)/protoc-gen-go-grpc
 dev:  
 	go run cmd/main.go
 
+# 清除raft資料
+clean:
+	rm -rf raft-snapshots/**
+
 # 安裝依賴
 init:  
 	go mod tidy
