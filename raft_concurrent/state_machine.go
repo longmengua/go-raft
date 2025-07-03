@@ -54,7 +54,9 @@ func (a *AssetConcurrentStateMachine) Lookup(query interface{}) (interface{}, er
 		return a.store.Get(q.UID, q.Currency), nil
 	case string:
 		if q == "list" {
-			return a.store.List(), nil
+			result := a.store.List()
+			// log.Printf("Returning list data: %+v", result) // 添加日誌
+			return result, nil
 		}
 	}
 	return nil, fmt.Errorf("unknown query")

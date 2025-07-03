@@ -16,7 +16,7 @@ import (
 type CurrencyStore struct {
 	mu      sync.RWMutex
 	baseDir string
-	store   map[string]map[string]float64 // currency -> uid -> balance
+	store   map[string]map[string]float64 // currency -> uid(name) -> balance
 }
 
 func NewCurrencyStore(baseDir string) *CurrencyStore {
@@ -44,17 +44,19 @@ func (cs *CurrencyStore) Get(uid, currency string) float64 {
 }
 
 func (cs *CurrencyStore) List() map[string]map[string]float64 {
-	cs.mu.RLock()
-	defer cs.mu.RUnlock()
-
-	copy := make(map[string]map[string]float64)
-	for currency, users := range cs.store {
-		copy[currency] = make(map[string]float64)
-		for uid, amount := range users {
-			copy[currency][uid] = amount
+	// 返回深拷貝以防數據被意外修改
+	result := make(map[string]map[string]float64) // uid -> currency -> balance
+	// log.Printf("Listing all balances: %+v", cs.store)
+	for currency, uidAmounts := range cs.store {
+		for uid, amount := range uidAmounts {
+			if result[uid] == nil {
+				result[uid] = make(map[string]float64)
+			}
+			result[uid][currency] = amount
+			// log.Printf("%s has %f in %s", uid, amount, currency)
 		}
 	}
-	return copy
+	return result
 }
 
 func (cs *CurrencyStore) Save() error {

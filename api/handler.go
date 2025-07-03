@@ -85,12 +85,12 @@ func (h *Handler) GetBalances(c *gin.Context) {
 		return
 	}
 
-	// 轉型成 map[string]map[string]int64
-	data, ok := result.(map[string]map[string]int64)
+	// 修改為正確的 float64 類型
+	data, ok := result.(map[string]map[string]float64)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid data format from raft"})
 		return
 	}
-
+	// log.Printf("GetBalances: %d, result: %+v, data: %+v", h.clusterID, result, data)
 	c.JSON(http.StatusOK, gin.H{"data": data})
 }
