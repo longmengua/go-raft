@@ -69,6 +69,7 @@ func (cs *CurrencyStore) Save() error {
 	}
 
 	for currency, data := range cs.store {
+		log.Printf("Saving currency %s with data: %+v", currency, data)
 		path := filepath.Join(cs.baseDir, currency+".snapshot.gz")
 		if err := saveCurrency(path, data); err != nil {
 			return err

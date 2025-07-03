@@ -42,11 +42,13 @@ func main() {
 		config.Config{
 			ReplicaID:          nodeID,
 			ShardID:            clusterID,
-			ElectionRTT:        10,
-			HeartbeatRTT:       1,
-			CheckQuorum:        true,
-			SnapshotEntries:    10,
-			CompactionOverhead: 5,
+			ElectionRTT:        20,    // 更長的選舉超時
+			HeartbeatRTT:       1,     // 保持心跳頻率
+			CheckQuorum:        true,  // 啟用法定人數檢查
+			SnapshotEntries:    10000, // 每10000條日誌觸發快照
+			CompactionOverhead: 5000,  // 保留5000條歷史日誌
+			// 可選的高級參數：
+			MaxInMemLogSize: 8 * 1024 * 1024, // 內存中日誌最大大小 (8MB)
 		},
 	)
 	if err != nil {
