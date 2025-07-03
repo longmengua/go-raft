@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"go-raft/storage"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -42,8 +43,8 @@ func (h *Handler) AddAsset(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "encode failed"})
 		return
 	}
-
 	session := h.nh.GetNoOPSession(h.clusterID)
+	log.Printf("AddAsset: %d, %+v", h.clusterID, session)
 	if _, err := h.nh.SyncPropose(c.Request.Context(), session, buf.Bytes()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "raft propose failed: " + err.Error()})
 		return
@@ -75,4 +76,21 @@ func (h *Handler) GetBalance(c *gin.Context) {
 		"currency": currency,
 		"balance":  value.(float64),
 	})
+}
+
+func (h *Handler) GetBalances(c *gin.Context) {
+	result, err := h.nh.SyncRead(c.Request.Context(), h.clusterID, "list")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "raft read failed: " + err.Error()})
+		return
+	}
+
+	// 轉型成 map[string]map[string]int64
+	data, ok := result.(map[string]map[string]int64)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid data format from raft"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": data})
 }

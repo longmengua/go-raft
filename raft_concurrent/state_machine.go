@@ -3,6 +3,7 @@ package raftconcurrent
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 	"go-raft/storage"
 	"io"
 	"sync"
@@ -47,10 +48,16 @@ func (a *AssetConcurrentStateMachine) Lookup(query interface{}) (interface{}, er
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	if q, ok := query.(storage.AssetCommand); ok {
+	switch q := query.(type) {
+	case storage.AssetCommand:
+		// 查單一使用者幣別餘額
 		return a.store.Get(q.UID, q.Currency), nil
+	case string:
+		if q == "list" {
+			return a.store.List(), nil
+		}
 	}
-	return nil, nil
+	return nil, fmt.Errorf("unknown query")
 }
 
 // 快照儲存
