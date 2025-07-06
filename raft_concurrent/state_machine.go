@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"go-raft/storage"
 	"io"
-	"sync"
 
 	"github.com/lni/dragonboat/v4/statemachine"
 )
@@ -14,7 +13,6 @@ import (
 var FileDir = "raft-snapshots"
 
 type AssetConcurrentStateMachine struct {
-	mu    sync.RWMutex
 	store *storage.CurrencyStore
 }
 
@@ -28,9 +26,6 @@ func NewAssetRaftConcurrentMachine() statemachine.IConcurrentStateMachine {
 
 // 批次更新
 func (a *AssetConcurrentStateMachine) Update(entries []statemachine.Entry) ([]statemachine.Entry, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	for i, entry := range entries {
 		var cmd storage.AssetCommand
 		if err := gob.NewDecoder(bytes.NewReader(entry.Cmd)).Decode(&cmd); err != nil {
@@ -44,10 +39,7 @@ func (a *AssetConcurrentStateMachine) Update(entries []statemachine.Entry) ([]st
 }
 
 // 查詢
-func (a *AssetConcurrentStateMachine) Lookup(query interface{}) (interface{}, error) {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
+func (a *AssetConcurrentStateMachine) Lookup(query any) (any, error) {
 	switch q := query.(type) {
 	case storage.AssetCommand:
 		// 查單一使用者幣別餘額
@@ -63,25 +55,19 @@ func (a *AssetConcurrentStateMachine) Lookup(query interface{}) (interface{}, er
 }
 
 // 快照儲存
-func (a *AssetConcurrentStateMachine) SaveSnapshot(_ interface{}, w io.Writer, _ statemachine.ISnapshotFileCollection, _ <-chan struct{}) error {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
+func (a *AssetConcurrentStateMachine) SaveSnapshot(_ any, w io.Writer, _ statemachine.ISnapshotFileCollection, _ <-chan struct{}) error {
 	return a.store.Save()
 }
 
 // 快照回復
 func (a *AssetConcurrentStateMachine) RecoverFromSnapshot(_ io.Reader, _ []statemachine.SnapshotFile, _ <-chan struct{}) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	return a.store.Load()
 }
 
 func (a *AssetConcurrentStateMachine) Close() error { return nil }
 
 // PrepareSnapshot implements the statemachine.IConcurrentStateMachine interface.
-func (a *AssetConcurrentStateMachine) PrepareSnapshot() (interface{}, error) {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
+func (a *AssetConcurrentStateMachine) PrepareSnapshot() (any, error) {
 	// Return any state needed for snapshot, or nil if not needed.
 	return nil, nil
 }
