@@ -1,4 +1,4 @@
-package storage
+package raftstore
 
 import (
 	"bytes"
@@ -13,60 +13,20 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// safeFloatMap 封裝每個 currency 的 uid->balance map，帶鎖保證寫入安全
-type safeFloatMap struct {
-	mu   sync.RWMutex
-	data map[string]float64
-}
-
-func newSafeFloatMap() *safeFloatMap {
-	return &safeFloatMap{
-		data: make(map[string]float64),
-	}
-}
-
-func (s *safeFloatMap) Get(uid string) float64 {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.data[uid]
-}
-
-func (s *safeFloatMap) Add(uid string, amount float64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.data[uid] += amount
-}
-
-func (s *safeFloatMap) Snapshot() map[string]float64 {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	cp := make(map[string]float64, len(s.data))
-	for k, v := range s.data {
-		cp[k] = v
-	}
-	return cp
-}
-
-func (s *safeFloatMap) LoadData(newData map[string]float64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.data = newData
-}
-
-type CurrencyStore struct {
+type Currency struct {
 	baseDir string
 	store   sync.Map // key: currency string, value: *safeFloatMap
 	sfGroup singleflight.Group
 }
 
-func NewCurrencyStore(baseDir string) *CurrencyStore {
-	return &CurrencyStore{
+func NewCurrencyStore(baseDir string) *Currency {
+	return &Currency{
 		baseDir: baseDir,
 	}
 }
 
 // Add 增加使用者資產
-func (cs *CurrencyStore) Add(uid, currency string, amount float64) {
+func (cs *Currency) Add(uid, currency string, amount float64) {
 	val, loaded := cs.store.Load(currency)
 	if !loaded {
 		// 初始化 safeFloatMap
@@ -88,7 +48,7 @@ func (cs *CurrencyStore) Add(uid, currency string, amount float64) {
 }
 
 // Get 讀取指定 user 的指定 currency 餘額，沒有鎖，讀取快
-func (cs *CurrencyStore) Get(uid, currency string) float64 {
+func (cs *Currency) Get(uid, currency string) float64 {
 	val, ok := cs.store.Load(currency)
 	if !ok {
 		return 0
@@ -98,7 +58,7 @@ func (cs *CurrencyStore) Get(uid, currency string) float64 {
 }
 
 // GetOrLoad 讀取，若尚未載入則自動載入
-func (cs *CurrencyStore) GetOrLoad(uid, currency string) (float64, error) {
+func (cs *Currency) GetOrLoad(uid, currency string) (float64, error) {
 	if _, ok := cs.store.Load(currency); !ok {
 		if err := cs.LoadCurrency(currency); err != nil {
 			return 0, err
@@ -108,7 +68,7 @@ func (cs *CurrencyStore) GetOrLoad(uid, currency string) (float64, error) {
 }
 
 // List 回傳全部資料快照：map[uid]map[currency]balance
-func (cs *CurrencyStore) List() map[string]map[string]float64 {
+func (cs *Currency) List() map[string]map[string]float64 {
 	result := make(map[string]map[string]float64)
 
 	cs.store.Range(func(key, value any) bool {
@@ -129,7 +89,7 @@ func (cs *CurrencyStore) List() map[string]map[string]float64 {
 }
 
 // Save 儲存全部貨幣資料
-func (cs *CurrencyStore) Save() error {
+func (cs *Currency) Save() error {
 	if err := os.MkdirAll(cs.baseDir, 0755); err != nil {
 		return err
 	}
@@ -152,7 +112,7 @@ func (cs *CurrencyStore) Save() error {
 }
 
 // Load 載入全部貨幣 snapshot
-func (cs *CurrencyStore) Load() error {
+func (cs *Currency) Load() error {
 	if err := os.MkdirAll(cs.baseDir, 0755); err != nil {
 		return err
 	}
@@ -175,7 +135,7 @@ func (cs *CurrencyStore) Load() error {
 }
 
 // LoadCurrency 單獨載入某貨幣檔案，使用 singleflight 避免重複讀取
-func (cs *CurrencyStore) LoadCurrency(currency string) error {
+func (cs *Currency) LoadCurrency(currency string) error {
 	path := filepath.Join(cs.baseDir, currency+".snapshot.gz")
 
 	result, err, _ := cs.sfGroup.Do(currency, func() (interface{}, error) {

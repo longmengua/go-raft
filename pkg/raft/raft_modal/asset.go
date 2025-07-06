@@ -1,6 +1,6 @@
-package storage
+package raftmodal
 
-type AssetCommand struct {
+type Asset struct {
 	UID      string
 	Currency string
 	Amount   float64

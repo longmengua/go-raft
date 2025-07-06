@@ -1,9 +1,10 @@
-package api
+package handlers
 
 import (
 	"bytes"
 	"encoding/gob"
-	"go-raft/storage"
+	"go-raft/internal/domain/modal"
+	raftmodal "go-raft/pkg/raft/raft_modal"
 	"log"
 	"net/http"
 
@@ -11,33 +12,23 @@ import (
 	"github.com/lni/dragonboat/v4"
 )
 
-type Handler struct {
+type Asset struct {
 	nh        *dragonboat.NodeHost
 	clusterID uint64
 }
 
-func NewHandler(nh *dragonboat.NodeHost, clusterID uint64) *Handler {
-	return &Handler{nh: nh, clusterID: clusterID}
+func NewHandlerAsset(nh *dragonboat.NodeHost, clusterID uint64) *Asset {
+	return &Asset{nh: nh, clusterID: clusterID}
 }
 
-type AddRequest struct {
-	UID      string  `json:"uid" binding:"required"`
-	Currency string  `json:"currency" binding:"required"`
-	Amount   float64 `json:"amount" binding:"required"`
-}
-
-func (h *Handler) AddAsset(c *gin.Context) {
-	var req AddRequest
+func (h *Asset) AddAsset(c *gin.Context) {
+	var req modal.RequestAdd
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	cmd := storage.AssetCommand{
-		UID:      req.UID,
-		Currency: req.Currency,
-		Amount:   req.Amount,
-	}
+	cmd := raftmodal.Asset(req)
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(&cmd); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "encode failed"})
@@ -53,7 +44,7 @@ func (h *Handler) AddAsset(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "asset updated"})
 }
 
-func (h *Handler) GetBalance(c *gin.Context) {
+func (h *Asset) GetBalance(c *gin.Context) {
 	uid := c.Query("uid")
 	currency := c.Query("currency")
 	if uid == "" || currency == "" {
@@ -61,7 +52,7 @@ func (h *Handler) GetBalance(c *gin.Context) {
 		return
 	}
 
-	query := storage.AssetCommand{
+	query := raftmodal.Asset{
 		UID:      uid,
 		Currency: currency,
 	}
@@ -78,7 +69,7 @@ func (h *Handler) GetBalance(c *gin.Context) {
 	})
 }
 
-func (h *Handler) GetBalances(c *gin.Context) {
+func (h *Asset) GetBalances(c *gin.Context) {
 	result, err := h.nh.SyncRead(c.Request.Context(), h.clusterID, "list")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "raft read failed: " + err.Error()})
