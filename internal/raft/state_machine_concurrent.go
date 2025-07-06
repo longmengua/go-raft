@@ -1,4 +1,4 @@
-package raftstate
+package raft
 
 import (
 	"bytes"

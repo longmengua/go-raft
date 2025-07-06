@@ -2,7 +2,6 @@ package raft
 
 import (
 	"go-raft/internal/configs"
-	raftstate "go-raft/internal/raft_state_machine"
 	"log"
 
 	"github.com/lni/dragonboat/v4"
@@ -33,7 +32,7 @@ func New() (*RaftStore, error) {
 		map[uint64]string{configs.NodeID: configs.RaftAddress},
 		false,
 		func(clusterID, nodeID uint64) statemachine.IConcurrentStateMachine {
-			return raftstate.NewAssetRaftConcurrentMachine()
+			return NewAssetRaftConcurrentMachine()
 		},
 		config.Config{
 			ReplicaID:          configs.NodeID,
