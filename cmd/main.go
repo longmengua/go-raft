@@ -1,9 +1,9 @@
 package main
 
 import (
-	"go-raft/internal/server/http"
-	handlers "go-raft/internal/server/http/hanlders"
-	"go-raft/pkg/raft"
+	"go-raft/internal/adapters/http"
+	"go-raft/internal/adapters/http/asset"
+	"go-raft/internal/raft"
 	"log"
 )
 
@@ -15,7 +15,7 @@ func main() {
 	}
 
 	// Initialize all hanlders
-	assethandler := handlers.NewHandlerAsset(raftstore.NodeHost, raftstore.ClusterID)
+	assethandler := asset.NewHanlder(raftstore.NodeHost, raftstore.ClusterID)
 
 	// [::1]:19090 for ipv6
 	httpserver := http.New([]string{":19090", "0.0.0.0:9090", "[::1]:9090"}, assethandler)

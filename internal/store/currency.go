@@ -1,9 +1,10 @@
-package raftstore
+package store
 
 import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"go-raft/pkg/maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +16,7 @@ import (
 
 type Currency struct {
 	baseDir string
-	store   sync.Map // key: currency string, value: *safeFloatMap
+	store   sync.Map // key: currency string, value: *maps.ThreadSafeFloatMap
 	sfGroup singleflight.Group
 }
 
@@ -29,12 +30,12 @@ func NewCurrencyStore(baseDir string) *Currency {
 func (cs *Currency) Add(uid, currency string, amount float64) {
 	val, loaded := cs.store.Load(currency)
 	if !loaded {
-		// 初始化 safeFloatMap
-		sfm := newSafeFloatMap()
+		// 初始化 maps.ThreadSafeFloatMap
+		sfm := maps.NewSafeFloatMap()
 		// 使用 singleflight 確保只載入一次貨幣檔案
 		err := cs.LoadCurrency(currency)
 		if err != nil {
-			// 若 LoadCurrency 失敗，還是要新增一個空 safeFloatMap
+			// 若 LoadCurrency 失敗，還是要新增一個空 maps.ThreadSafeFloatMap
 			cs.store.Store(currency, sfm)
 			sfm.Add(uid, amount)
 			return
@@ -43,7 +44,7 @@ func (cs *Currency) Add(uid, currency string, amount float64) {
 		val, _ = cs.store.Load(currency)
 	}
 
-	sfm := val.(*safeFloatMap)
+	sfm := val.(*maps.SafeFloatMap)
 	sfm.Add(uid, amount)
 }
 
@@ -53,7 +54,7 @@ func (cs *Currency) Get(uid, currency string) float64 {
 	if !ok {
 		return 0
 	}
-	sfm := val.(*safeFloatMap)
+	sfm := val.(*maps.SafeFloatMap)
 	return sfm.Get(uid)
 }
 
@@ -73,7 +74,7 @@ func (cs *Currency) List() map[string]map[string]float64 {
 
 	cs.store.Range(func(key, value any) bool {
 		currency := key.(string)
-		sfm := value.(*safeFloatMap)
+		sfm := value.(*maps.SafeFloatMap)
 		snapshot := sfm.Snapshot()
 
 		for uid, balance := range snapshot {
@@ -97,7 +98,7 @@ func (cs *Currency) Save() error {
 	var err error
 	cs.store.Range(func(key, value any) bool {
 		currency := key.(string)
-		sfm := value.(*safeFloatMap)
+		sfm := value.(*maps.SafeFloatMap)
 		data := sfm.Snapshot()
 
 		path := filepath.Join(cs.baseDir, currency+".snapshot.gz")
@@ -149,10 +150,10 @@ func (cs *Currency) LoadCurrency(currency string) error {
 
 	val, loaded := cs.store.Load(currency)
 	if loaded {
-		sfm := val.(*safeFloatMap)
+		sfm := val.(*maps.SafeFloatMap)
 		sfm.LoadData(newData)
 	} else {
-		sfm := newSafeFloatMap()
+		sfm := maps.NewSafeFloatMap()
 		sfm.LoadData(newData)
 		cs.store.Store(currency, sfm)
 	}

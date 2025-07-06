@@ -3,9 +3,9 @@ package raftstate
 import (
 	"bytes"
 	"encoding/gob"
-	raftconfig "go-raft/pkg/raft/raft_config"
-	raftmodal "go-raft/pkg/raft/raft_modal"
-	raftstore "go-raft/pkg/raft/raft_store"
+	"go-raft/internal/configs"
+	"go-raft/internal/domain"
+	"go-raft/internal/store"
 	"io"
 	"sync"
 
@@ -14,19 +14,19 @@ import (
 
 type AssetRaftMachine struct {
 	mu    sync.RWMutex
-	store *raftstore.Currency
+	store *store.Currency
 }
 
 var _ statemachine.IStateMachine = (*AssetRaftMachine)(nil)
 
 func NewAssetRaftMachine() statemachine.IStateMachine {
-	cs := raftstore.NewCurrencyStore(raftconfig.FileDir)
+	cs := store.NewCurrencyStore(configs.FileDir)
 	_ = cs.Load() // 嘗試從磁碟載入
 	return &AssetRaftMachine{store: cs}
 }
 
 func (a *AssetRaftMachine) Update(entry statemachine.Entry) (statemachine.Result, error) {
-	var cmd raftmodal.Asset
+	var cmd domain.Asset
 	if err := gob.NewDecoder(bytes.NewReader(entry.Cmd)).Decode(&cmd); err != nil {
 		return statemachine.Result{}, err
 	}
@@ -36,7 +36,7 @@ func (a *AssetRaftMachine) Update(entry statemachine.Entry) (statemachine.Result
 }
 
 func (a *AssetRaftMachine) Lookup(query interface{}) (interface{}, error) {
-	if q, ok := query.(raftmodal.Asset); ok {
+	if q, ok := query.(domain.Asset); ok {
 		return a.store.Get(q.UID, q.Currency), nil
 	}
 	return nil, nil

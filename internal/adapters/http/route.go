@@ -2,8 +2,7 @@ package http
 
 import (
 	"fmt"
-	handlers "go-raft/internal/server/http/hanlders"
-	"go-raft/internal/server/http/middleware"
+	"go-raft/internal/adapters/http/asset"
 	"log"
 	"time"
 
@@ -12,10 +11,10 @@ import (
 
 type HttpServer struct {
 	Addr         []string
-	assethandler *handlers.Asset
+	assethandler *asset.Handler
 }
 
-func New(addr []string, assethandler *handlers.Asset) *HttpServer {
+func New(addr []string, assethandler *asset.Handler) *HttpServer {
 	return &HttpServer{
 		Addr:         addr,
 		assethandler: assethandler,
@@ -29,11 +28,11 @@ func (hs *HttpServer) Start() error {
 	r.Static("/static", "./static")
 
 	// 設置日誌格式
-	gin.DefaultWriter = middleware.NewLogger()
+	gin.DefaultWriter = NewLogger()
 
 	// 設置全局中間件
-	r.Use(middleware.NewRequestTimeout(5 * time.Second))
-	r.Use(middleware.NewTraceID()) // 添加Trace ID中間件
+	r.Use(NewRequestTimeout(5 * time.Second))
+	r.Use(NewTraceID()) // 添加Trace ID中間件
 
 	// Asset相關路由
 	r.POST("/asset/add", hs.assethandler.AddAsset)

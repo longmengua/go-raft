@@ -4,22 +4,22 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	raftconfig "go-raft/pkg/raft/raft_config"
-	raftmodal "go-raft/pkg/raft/raft_modal"
-	raftstore "go-raft/pkg/raft/raft_store"
+	"go-raft/internal/configs"
+	"go-raft/internal/domain"
+	"go-raft/internal/store"
 	"io"
 
 	"github.com/lni/dragonboat/v4/statemachine"
 )
 
 type AssetConcurrentStateMachine struct {
-	store *raftstore.Currency
+	store *store.Currency
 }
 
 var _ statemachine.IConcurrentStateMachine = (*AssetConcurrentStateMachine)(nil)
 
 func NewAssetRaftConcurrentMachine() statemachine.IConcurrentStateMachine {
-	cs := raftstore.NewCurrencyStore(raftconfig.FileDir)
+	cs := store.NewCurrencyStore(configs.FileDir)
 	_ = cs.Load() // 嘗試從磁碟載入
 	return &AssetConcurrentStateMachine{store: cs}
 }
@@ -27,7 +27,7 @@ func NewAssetRaftConcurrentMachine() statemachine.IConcurrentStateMachine {
 // 批次更新
 func (a *AssetConcurrentStateMachine) Update(entries []statemachine.Entry) ([]statemachine.Entry, error) {
 	for i, entry := range entries {
-		var cmd raftmodal.Asset
+		var cmd domain.Asset
 		if err := gob.NewDecoder(bytes.NewReader(entry.Cmd)).Decode(&cmd); err != nil {
 			entries[i].Result = statemachine.Result{Value: 1}
 			continue
@@ -41,7 +41,7 @@ func (a *AssetConcurrentStateMachine) Update(entries []statemachine.Entry) ([]st
 // 查詢
 func (a *AssetConcurrentStateMachine) Lookup(query any) (any, error) {
 	switch q := query.(type) {
-	case raftmodal.Asset:
+	case domain.Asset:
 		// 查單一使用者幣別餘額
 		return a.store.Get(q.UID, q.Currency), nil
 	case string:

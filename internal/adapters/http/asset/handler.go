@@ -1,10 +1,9 @@
-package handlers
+package asset
 
 import (
 	"bytes"
 	"encoding/gob"
-	"go-raft/internal/domain/modal"
-	raftmodal "go-raft/pkg/raft/raft_modal"
+	"go-raft/internal/domain"
 	"log"
 	"net/http"
 
@@ -12,23 +11,23 @@ import (
 	"github.com/lni/dragonboat/v4"
 )
 
-type Asset struct {
+type Handler struct {
 	nh        *dragonboat.NodeHost
 	clusterID uint64
 }
 
-func NewHandlerAsset(nh *dragonboat.NodeHost, clusterID uint64) *Asset {
-	return &Asset{nh: nh, clusterID: clusterID}
+func NewHanlder(nh *dragonboat.NodeHost, clusterID uint64) *Handler {
+	return &Handler{nh: nh, clusterID: clusterID}
 }
 
-func (h *Asset) AddAsset(c *gin.Context) {
-	var req modal.RequestAdd
+func (h *Handler) AddAsset(c *gin.Context) {
+	var req RequestAdd
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	cmd := raftmodal.Asset(req)
+	cmd := domain.Asset(req)
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(&cmd); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "encode failed"})
@@ -44,7 +43,7 @@ func (h *Asset) AddAsset(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "asset updated"})
 }
 
-func (h *Asset) GetBalance(c *gin.Context) {
+func (h *Handler) GetBalance(c *gin.Context) {
 	uid := c.Query("uid")
 	currency := c.Query("currency")
 	if uid == "" || currency == "" {
@@ -52,7 +51,7 @@ func (h *Asset) GetBalance(c *gin.Context) {
 		return
 	}
 
-	query := raftmodal.Asset{
+	query := domain.Asset{
 		UID:      uid,
 		Currency: currency,
 	}
@@ -69,7 +68,7 @@ func (h *Asset) GetBalance(c *gin.Context) {
 	})
 }
 
-func (h *Asset) GetBalances(c *gin.Context) {
+func (h *Handler) GetBalances(c *gin.Context) {
 	result, err := h.nh.SyncRead(c.Request.Context(), h.clusterID, "list")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "raft read failed: " + err.Error()})

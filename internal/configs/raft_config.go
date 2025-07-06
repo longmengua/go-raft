@@ -1,4 +1,4 @@
-package raftconfig
+package configs
 
 const (
 	// public

@@ -1,4 +1,4 @@
-package raftmodal
+package domain
 
 type Asset struct {
 	UID      string

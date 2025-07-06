@@ -1,4 +1,4 @@
-package modal
+package asset
 
 type RequestAdd struct {
 	UID      string  `json:"uid" binding:"required"`
