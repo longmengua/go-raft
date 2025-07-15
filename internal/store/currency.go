@@ -14,11 +14,21 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-const snapshotVersion = 2 // 每次資料結構變更時 +1
+type DataV1 struct {
+	store map[string]float64
+}
 
+type DataV2 struct {
+	store []struct {
+		key   string
+		value string
+	}
+}
+
+const currentSnapshotVersion = 2 // 每次資料結構變更時 +1
 type SnapshotFile struct {
 	Version int
-	Data    map[string]float64
+	Data    any // DataV1, DataV2
 }
 
 type Currency struct {
@@ -85,6 +95,7 @@ func (cs *Currency) List() map[string]map[string]float64 {
 }
 
 func (cs *Currency) SaveSnapshot() error {
+	// 0755 是 linux 權限設置
 	if err := os.MkdirAll(cs.baseDir, 0755); err != nil {
 		return err
 	}
@@ -147,17 +158,18 @@ func (cs *Currency) LoadCurrency(currency string) error {
 func saveCurrency(path string, data map[string]float64) error {
 	buf := new(bytes.Buffer)
 	snapshot := SnapshotFile{
-		Version: snapshotVersion,
+		Version: currentSnapshotVersion,
 		Data:    data,
 	}
 	if err := gob.NewEncoder(buf).Encode(snapshot); err != nil {
 		return err
 	}
+	// 使用 snappy 進行壓縮
 	compressed := snappy.Encode(nil, buf.Bytes())
 	return os.WriteFile(path, compressed, 0644)
 }
 
-func loadCurrency(path string) (map[string]float64, error) {
+func loadCurrency(path string) (*DataV2, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -170,17 +182,39 @@ func loadCurrency(path string) (map[string]float64, error) {
 	if err := gob.NewDecoder(bytes.NewReader(decompressed)).Decode(&snapshot); err != nil {
 		return nil, err
 	}
+	//  snapshot 版本兼容
 	switch snapshot.Version {
 	case 1:
-		return migrateFromV1(snapshot.Data)
+		dataV1, ok := snapshot.Data.(*DataV1)
+		if !ok {
+			return nil, fmt.Errorf("invalid data type for version 1 snapshot")
+		}
+		return migrateFromV1(dataV1)
 	case 2:
-		return snapshot.Data, nil
+		dataV2, ok := snapshot.Data.(*DataV2)
+		if !ok {
+			return nil, fmt.Errorf("invalid data type for version 2 snapshot")
+		}
+		return dataV2, nil
 	default:
 		return nil, fmt.Errorf("unsupported snapshot version %d", snapshot.Version)
 	}
 }
 
-// Example migration logic for v1 ➔ current
-func migrateFromV1(oldData map[string]float64) (map[string]float64, error) {
-	return oldData, nil
+// 實作 migration 邏輯 for v1 ➔ current，假設目前是v2
+func migrateFromV1(oldData *DataV1) (*DataV2, error) {
+	if oldData == nil {
+		return &DataV2{}, nil
+	}
+	var v2 DataV2
+	for k, v := range oldData.store {
+		v2.store = append(v2.store, struct {
+			key   string
+			value string
+		}{
+			key:   k,
+			value: fmt.Sprintf("%f", v),
+		})
+	}
+	return &v2, nil
 }
