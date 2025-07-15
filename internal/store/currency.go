@@ -25,10 +25,11 @@ type StoreV2 struct {
 	}
 }
 
-const currentSnapshotVersion = 2 // 每次資料結構變更時 +1
+const currentSnapshotVersion = 1 // snapshot版控
+
 type SnapshotFile struct {
-	Version int
-	Data    any // DataV1, DataV2
+	SnapshotVersion int
+	Data            any // DataV1, DataV2
 }
 
 type CurrencyStore struct {
@@ -158,8 +159,8 @@ func (cs *CurrencyStore) LoadCurrency(currency string) error {
 func saveCurrency(path string, data map[string]float64) error {
 	buf := new(bytes.Buffer)
 	snapshot := SnapshotFile{
-		Version: currentSnapshotVersion,
-		Data:    data,
+		SnapshotVersion: currentSnapshotVersion,
+		Data:            data,
 	}
 	if err := gob.NewEncoder(buf).Encode(snapshot); err != nil {
 		return err
@@ -183,7 +184,7 @@ func loadCurrency(path string) (*StoreV2, error) {
 		return nil, err
 	}
 	//  snapshot 版本兼容
-	switch snapshot.Version {
+	switch snapshot.SnapshotVersion {
 	case 1:
 		dataV1, ok := snapshot.Data.(*StoreV1)
 		if !ok {
@@ -197,7 +198,7 @@ func loadCurrency(path string) (*StoreV2, error) {
 		}
 		return dataV2, nil
 	default:
-		return nil, fmt.Errorf("unsupported snapshot version %d", snapshot.Version)
+		return nil, fmt.Errorf("unsupported snapshot version %d", snapshot.SnapshotVersion)
 	}
 }
 
