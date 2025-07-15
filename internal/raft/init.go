@@ -37,14 +37,13 @@ func New() (*RaftStore, error) {
 		config.Config{
 			ReplicaID:          configs.NodeID,
 			ShardID:            configs.ClusterID,
-			ElectionRTT:        20,   // 更長的選舉超時
-			HeartbeatRTT:       1,    // 保持心跳頻率
-			CheckQuorum:        true, // 啟用法定人數檢查
-			SnapshotEntries:    10,   // 每10000條日誌觸發快照
-			CompactionOverhead: 5,    // 保留5000條歷史日誌
-			// 可選的高級參數：
+			ElectionRTT:        20,    // 更長的選舉超時
+			HeartbeatRTT:       2,     // 保持心跳頻率
+			CheckQuorum:        true,  // 啟用法定人數檢查
+			SnapshotEntries:    10000, // 每10000條日誌觸發快照
+			CompactionOverhead: 500,   // 保留500條歷史日誌
 			// MaxInMemLogSize: 8 * 1024 * 1024, // 內存中日誌最大大小 (8MB)
-			MaxInMemLogSize: 1 * 1024, // 1KB
+			MaxInMemLogSize: 128 * 1024, // 128KB
 		},
 	)
 	if err != nil {

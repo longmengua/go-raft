@@ -56,7 +56,11 @@ func (a *AssetConcurrentStateMachine) Lookup(query any) (any, error) {
 
 // 快照儲存
 func (a *AssetConcurrentStateMachine) SaveSnapshot(_ any, w io.Writer, _ statemachine.ISnapshotFileCollection, _ <-chan struct{}) error {
-	return a.store.SaveSnapshot()
+	err := a.store.SaveSnapshot()
+	if err == nil {
+		err = a.store.CleanupOldSnapshots(7)
+	}
+	return err
 }
 
 // 快照回復

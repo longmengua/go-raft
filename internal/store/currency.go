@@ -12,14 +12,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/golang/snappy"
 	"golang.org/x/sync/singleflight"
 )
 
-// init() 是 Go 的特殊函式，會在 package 初始化時自動執行，不需要在其他地方呼叫。
 func init() {
-	// 註冊 gob 序列化時會用到的型別
 	gob.Register(&StoreV1{})
 	gob.Register(&StoreV2{})
 	gob.Register(map[string]float64{})
@@ -36,23 +35,21 @@ type StoreV2 struct {
 	}
 }
 
-const currentSnapshotVersion = configs.SnapshotVersion // snapshot版控
+const currentSnapshotVersion = configs.SnapshotVersion
 
 type SnapshotFile struct {
 	SnapshotVersion int
-	Data            any // 實際存放 *StoreV1 或 *StoreV2 指標
+	Data            any
 }
 
 type CurrencyStore struct {
 	baseDir string
-	store   sync.Map // key: currency string, value: *maps.ThreadSafeFloatMap
+	store   sync.Map
 	sfGroup singleflight.Group
 }
 
 func NewCurrencyStore(baseDir string) *CurrencyStore {
-	return &CurrencyStore{
-		baseDir: baseDir,
-	}
+	return &CurrencyStore{baseDir: baseDir}
 }
 
 func (cs *CurrencyStore) Update(uid, currency string, amount float64) {
@@ -107,16 +104,16 @@ func (cs *CurrencyStore) List() map[string]map[string]float64 {
 }
 
 func (cs *CurrencyStore) SaveSnapshot() error {
-	// 0755 是 linux 權限設置
 	if err := os.MkdirAll(cs.baseDir, 0755); err != nil {
 		return err
 	}
+	today := time.Now().Format("20060102")
 	var err error
 	cs.store.Range(func(key, value any) bool {
 		currency := key.(string)
 		sfm := value.(*maps.SafeFloatMap)
 		data := sfm.Snapshot()
-		path := filepath.Join(cs.baseDir, currency+".snapshot.gz")
+		path := filepath.Join(cs.baseDir, fmt.Sprintf("%s_%s.snapshot.gz", currency, today))
 		if e := saveCurrency(path, data); e != nil {
 			err = e
 			return false
@@ -126,29 +123,58 @@ func (cs *CurrencyStore) SaveSnapshot() error {
 	return err
 }
 
-func (cs *CurrencyStore) RecoverFromSnapshot() error {
-	if err := os.MkdirAll(cs.baseDir, 0755); err != nil {
-		return err
-	}
+func (cs *CurrencyStore) CleanupOldSnapshots(retentionDays int) error {
 	files, err := os.ReadDir(cs.baseDir)
 	if err != nil {
 		return err
 	}
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
 	for _, file := range files {
 		if file.IsDir() || !strings.HasSuffix(file.Name(), ".snapshot.gz") {
 			continue
 		}
-		currency := strings.TrimSuffix(file.Name(), ".snapshot.gz")
-		if err := cs.LoadCurrency(currency); err != nil {
-			return err
+		parts := strings.Split(file.Name(), "_")
+		if len(parts) != 2 {
+			continue
+		}
+		dateStr := strings.TrimSuffix(parts[1], ".snapshot.gz")
+		t, err := time.Parse("20060102", dateStr)
+		if err != nil {
+			continue
+		}
+		if t.Before(cutoff) {
+			os.Remove(filepath.Join(cs.baseDir, file.Name()))
 		}
 	}
 	return nil
 }
 
 func (cs *CurrencyStore) LoadCurrency(currency string) error {
-	path := filepath.Join(cs.baseDir, currency+".snapshot.gz")
-	result, err, _ := cs.sfGroup.Do(currency, func() (any, error) {
+	files, err := os.ReadDir(cs.baseDir)
+	if err != nil {
+		return err
+	}
+	latestDate := ""
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		prefix := currency + "_"
+		if strings.HasPrefix(file.Name(), prefix) && strings.HasSuffix(file.Name(), ".snapshot.gz") {
+			dateStr := strings.TrimSuffix(strings.TrimPrefix(file.Name(), prefix), ".snapshot.gz")
+			if len(dateStr) == 8 && dateStr > latestDate {
+				latestDate = dateStr
+			}
+		}
+	}
+	if latestDate == "" {
+		return fmt.Errorf("no snapshot found for currency: %s", currency)
+	}
+
+	filename := fmt.Sprintf("%s_%s.snapshot.gz", currency, latestDate)
+	path := filepath.Join(cs.baseDir, filename)
+
+	result, err, _ := cs.sfGroup.Do(path, func() (any, error) {
 		return loadCurrency(path)
 	})
 	if err != nil {
@@ -167,10 +193,8 @@ func (cs *CurrencyStore) LoadCurrency(currency string) error {
 	return nil
 }
 
-// saveCurrency 負責序列化並壓縮保存快照
 func saveCurrency(path string, data map[string]float64) error {
 	buf := new(bytes.Buffer)
-	// 根據 currentSnapshotVersion 產生對應結構快照
 	var snapshot SnapshotFile
 	if currentSnapshotVersion == 1 {
 		snapshot = SnapshotFile{
@@ -196,16 +220,13 @@ func saveCurrency(path string, data map[string]float64) error {
 			Data:            &StoreV2{Data: arr},
 		}
 	}
-
 	if err := gob.NewEncoder(buf).Encode(snapshot); err != nil {
 		return err
 	}
-	// 使用 snappy 進行壓縮
 	compressed := snappy.Encode(nil, buf.Bytes())
 	return os.WriteFile(path, compressed, 0644)
 }
 
-// loadCurrency 負責讀取、解壓並反序列化快照，並做版本兼容
 func loadCurrency(path string) (map[string]float64, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -219,7 +240,6 @@ func loadCurrency(path string) (map[string]float64, error) {
 	if err := gob.NewDecoder(bytes.NewReader(decompressed)).Decode(&snapshot); err != nil {
 		return nil, err
 	}
-	//  snapshot 版本兼容
 	switch snapshot.SnapshotVersion {
 	case 1:
 		dataV1, ok := snapshot.Data.(*StoreV1)
@@ -246,7 +266,6 @@ func loadCurrency(path string) (map[string]float64, error) {
 	}
 }
 
-// 實作 migration 邏輯 for v1 ➔ current，假設目前是v2
 func migrateFromV1(oldData *StoreV1) (map[string]float64, error) {
 	if oldData == nil {
 		return map[string]float64{}, nil
