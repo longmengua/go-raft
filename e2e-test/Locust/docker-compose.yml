@@ -1,0 +1,16 @@
+
+services:
+  master:
+    build: .
+    container_name: locust-master
+    ports:
+      - "8089:8089"  # Locust Web UI
+    command: --master
+
+  worker:
+    build: .
+    depends_on:
+      - master
+    command: --worker --master-host locust-master
+    deploy:
+      replicas: 5  # 調整 worker 數量
