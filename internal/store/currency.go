@@ -7,6 +7,7 @@ import (
 	"go-raft/pkg/maps"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -14,22 +15,30 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+// init() 是 Go 的特殊函式，會在 package 初始化時自動執行，不需要在其他地方呼叫。
+func init() {
+	// 註冊 gob 序列化時會用到的型別
+	gob.Register(&StoreV1{})
+	gob.Register(&StoreV2{})
+	gob.Register(map[string]float64{})
+}
+
 type StoreV1 struct {
 	Data map[string]float64
 }
 
 type StoreV2 struct {
 	Data []struct {
-		key   string
-		value string
+		Key   string
+		Value string
 	}
 }
 
-const currentSnapshotVersion = 1 // snapshot版控
+const currentSnapshotVersion = 2 // snapshot版控
 
 type SnapshotFile struct {
 	SnapshotVersion int
-	Data            any // DataV1, DataV2
+	Data            any // 實際存放 *StoreV1 或 *StoreV2 指標
 }
 
 type CurrencyStore struct {
@@ -156,12 +165,36 @@ func (cs *CurrencyStore) LoadCurrency(currency string) error {
 	return nil
 }
 
+// saveCurrency 負責序列化並壓縮保存快照
 func saveCurrency(path string, data map[string]float64) error {
 	buf := new(bytes.Buffer)
-	snapshot := SnapshotFile{
-		SnapshotVersion: currentSnapshotVersion,
-		Data:            data,
+	// 根據 currentSnapshotVersion 產生對應結構快照
+	var snapshot SnapshotFile
+	if currentSnapshotVersion == 1 {
+		snapshot = SnapshotFile{
+			SnapshotVersion: 1,
+			Data:            &StoreV1{Data: data},
+		}
+	} else {
+		var arr []struct {
+			Key   string
+			Value string
+		}
+		for k, v := range data {
+			arr = append(arr, struct {
+				Key   string
+				Value string
+			}{
+				Key:   k,
+				Value: fmt.Sprintf("%f", v),
+			})
+		}
+		snapshot = SnapshotFile{
+			SnapshotVersion: 2,
+			Data:            &StoreV2{Data: arr},
+		}
 	}
+
 	if err := gob.NewEncoder(buf).Encode(snapshot); err != nil {
 		return err
 	}
@@ -170,7 +203,8 @@ func saveCurrency(path string, data map[string]float64) error {
 	return os.WriteFile(path, compressed, 0644)
 }
 
-func loadCurrency(path string) (*StoreV2, error) {
+// loadCurrency 負責讀取、解壓並反序列化快照，並做版本兼容
+func loadCurrency(path string) (map[string]float64, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -196,26 +230,28 @@ func loadCurrency(path string) (*StoreV2, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid data type for version 2 snapshot")
 		}
-		return dataV2, nil
+		m := make(map[string]float64)
+		for _, kv := range dataV2.Data {
+			v, err := strconv.ParseFloat(kv.Value, 64)
+			if err != nil {
+				return nil, err
+			}
+			m[kv.Key] = v
+		}
+		return m, nil
 	default:
 		return nil, fmt.Errorf("unsupported snapshot version %d", snapshot.SnapshotVersion)
 	}
 }
 
 // 實作 migration 邏輯 for v1 ➔ current，假設目前是v2
-func migrateFromV1(oldData *StoreV1) (*StoreV2, error) {
+func migrateFromV1(oldData *StoreV1) (map[string]float64, error) {
 	if oldData == nil {
-		return &StoreV2{}, nil
+		return map[string]float64{}, nil
 	}
-	var v2 StoreV2
+	result := make(map[string]float64)
 	for k, v := range oldData.Data {
-		v2.Data = append(v2.Data, struct {
-			key   string
-			value string
-		}{
-			key:   k,
-			value: fmt.Sprintf("%f", v),
-		})
+		result[k] = v
 	}
-	return &v2, nil
+	return result, nil
 }
