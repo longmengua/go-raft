@@ -60,15 +60,14 @@ func New() (*RaftStore, error) {
 			return NewAssetRaftConcurrentMachine()
 		},
 		config.Config{
-			ReplicaID:          configs.NodeID,
-			ShardID:            configs.ClusterID,
-			ElectionRTT:        20,    // 更長的選舉超時
-			HeartbeatRTT:       2,     // 保持心跳頻率
-			CheckQuorum:        true,  // 啟用法定人數檢查
-			SnapshotEntries:    10000, // 每10000條日誌觸發快照
-			CompactionOverhead: 500,   // 保留500條歷史日誌
-			// MaxInMemLogSize: 8 * 1024 * 1024, // 內存中日誌最大大小 (8MB)
-			MaxInMemLogSize: 128 * 1024, // 128KB
+			ElectionRTT:        30,                // 6秒選舉超時 (RTT=200ms)。更長的選舉超時。太小 ➔ 容易腦裂；太大 ➔ Failover 慢
+			HeartbeatRTT:       2,                 // 400ms 心跳。保持心跳頻率。太小 ➔ 浪費頻寬；太大 ➔ Failover 變慢
+			ReplicaID:          configs.NodeID,    // 本節點的 Raft Replica ID (唯一)
+			ShardID:            configs.ClusterID, // 所屬的 Raft 群組 (Shard) ID
+			CheckQuorum:        true,              // 保護資料一致性，防止腦裂。
+			SnapshotEntries:    50000,             // 5萬條快照。太小 ➔ 快照太頻繁；太大 ➔ 重新啟動慢
+			CompactionOverhead: 2000,              // 2千條保留日誌。調太小會造成 follower 追不上，導致 full snapshot
+			MaxInMemLogSize:    4 * 1024 * 1024,   // 4MB。太小會導致頻繁 snapshot & 日誌丟磁碟
 		},
 	)
 	if err != nil {
