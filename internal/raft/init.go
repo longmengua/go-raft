@@ -44,7 +44,7 @@ func New() (*RaftStore, error) {
 			CompactionOverhead: 5,    // 保留5000條歷史日誌
 			// 可選的高級參數：
 			// MaxInMemLogSize: 8 * 1024 * 1024, // 內存中日誌最大大小 (8MB)
-			MaxInMemLogSize: 50 * 1024, // 50KB
+			MaxInMemLogSize: 1 * 1024, // 1KB
 		},
 	)
 	if err != nil {
