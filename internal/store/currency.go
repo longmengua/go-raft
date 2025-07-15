@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"go-raft/pkg/maps"
+	maps0 "maps"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -250,8 +251,6 @@ func migrateFromV1(oldData *StoreV1) (map[string]float64, error) {
 		return map[string]float64{}, nil
 	}
 	result := make(map[string]float64)
-	for k, v := range oldData.Data {
-		result[k] = v
-	}
+	maps0.Copy(result, oldData.Data)
 	return result, nil
 }
