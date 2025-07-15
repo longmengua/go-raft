@@ -35,7 +35,7 @@ type StoreV2 struct {
 	}
 }
 
-const currentSnapshotVersion = 2 // snapshot版控
+const currentSnapshotVersion = 1 // snapshot版控
 
 type SnapshotFile struct {
 	SnapshotVersion int
