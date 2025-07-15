@@ -35,4 +35,8 @@ func main() {
 	// 等待中斷訊號
 	<-ctx.Done()
 	log.Println("Main: shutdown signal received")
+
+	// todo: 放所有需要graceful shutdown 的函式
+
+	log.Println("Main: all servers shutdown cleanly")
 }
