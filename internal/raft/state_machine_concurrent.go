@@ -20,7 +20,7 @@ var _ statemachine.IConcurrentStateMachine = (*AssetConcurrentStateMachine)(nil)
 
 func NewAssetRaftConcurrentMachine() statemachine.IConcurrentStateMachine {
 	cs := store.NewCurrencyStore(configs.FileDir)
-	_ = cs.Load() // 嘗試從磁碟載入
+	_ = cs.RecoverFromSnapshot() // 嘗試從磁碟載入
 	return &AssetConcurrentStateMachine{store: cs}
 }
 
@@ -32,7 +32,7 @@ func (a *AssetConcurrentStateMachine) Update(entries []statemachine.Entry) ([]st
 			entries[i].Result = statemachine.Result{Value: 1}
 			continue
 		}
-		a.store.Add(cmd.UID, cmd.Currency, cmd.Amount)
+		a.store.Update(cmd.UID, cmd.Currency, cmd.Amount)
 		entries[i].Result = statemachine.Result{Value: 0}
 	}
 	return entries, nil
@@ -56,12 +56,12 @@ func (a *AssetConcurrentStateMachine) Lookup(query any) (any, error) {
 
 // 快照儲存
 func (a *AssetConcurrentStateMachine) SaveSnapshot(_ any, w io.Writer, _ statemachine.ISnapshotFileCollection, _ <-chan struct{}) error {
-	return a.store.Save()
+	return a.store.SaveSnapshot()
 }
 
 // 快照回復
 func (a *AssetConcurrentStateMachine) RecoverFromSnapshot(_ io.Reader, _ []statemachine.SnapshotFile, _ <-chan struct{}) error {
-	return a.store.Load()
+	return a.store.RecoverFromSnapshot()
 }
 
 func (a *AssetConcurrentStateMachine) Close() error { return nil }

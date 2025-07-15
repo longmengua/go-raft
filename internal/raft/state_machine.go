@@ -21,7 +21,7 @@ var _ statemachine.IStateMachine = (*AssetRaftMachine)(nil)
 
 func NewAssetRaftMachine() statemachine.IStateMachine {
 	cs := store.NewCurrencyStore(configs.FileDir)
-	_ = cs.Load() // 嘗試從磁碟載入
+	_ = cs.RecoverFromSnapshot() // 嘗試從磁碟載入
 	return &AssetRaftMachine{store: cs}
 }
 
@@ -31,7 +31,7 @@ func (a *AssetRaftMachine) Update(entry statemachine.Entry) (statemachine.Result
 		return statemachine.Result{}, err
 	}
 
-	a.store.Add(cmd.UID, cmd.Currency, cmd.Amount)
+	a.store.Update(cmd.UID, cmd.Currency, cmd.Amount)
 	return statemachine.Result{}, nil
 }
 
@@ -45,13 +45,13 @@ func (a *AssetRaftMachine) Lookup(query interface{}) (interface{}, error) {
 func (a *AssetRaftMachine) SaveSnapshot(w io.Writer, _ statemachine.ISnapshotFileCollection, _ <-chan struct{}) error {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return a.store.Save()
+	return a.store.SaveSnapshot()
 }
 
 func (a *AssetRaftMachine) RecoverFromSnapshot(_ io.Reader, _ []statemachine.SnapshotFile, _ <-chan struct{}) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.store.Load()
+	return a.store.RecoverFromSnapshot()
 }
 
 func (a *AssetRaftMachine) Close() error { return nil }
