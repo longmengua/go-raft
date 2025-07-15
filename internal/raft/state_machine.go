@@ -14,7 +14,7 @@ import (
 
 type AssetRaftMachine struct {
 	mu    sync.RWMutex
-	store *store.Currency
+	store *store.CurrencyStore
 }
 
 var _ statemachine.IStateMachine = (*AssetRaftMachine)(nil)

@@ -13,7 +13,7 @@ import (
 )
 
 type AssetConcurrentStateMachine struct {
-	store *store.Currency
+	store *store.CurrencyStore
 }
 
 var _ statemachine.IConcurrentStateMachine = (*AssetConcurrentStateMachine)(nil)

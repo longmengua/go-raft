@@ -14,12 +14,12 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-type DataV1 struct {
-	store map[string]float64
+type StoreV1 struct {
+	Data map[string]float64
 }
 
-type DataV2 struct {
-	store []struct {
+type StoreV2 struct {
+	Data []struct {
 		key   string
 		value string
 	}
@@ -31,19 +31,19 @@ type SnapshotFile struct {
 	Data    any // DataV1, DataV2
 }
 
-type Currency struct {
+type CurrencyStore struct {
 	baseDir string
 	store   sync.Map // key: currency string, value: *maps.ThreadSafeFloatMap
 	sfGroup singleflight.Group
 }
 
-func NewCurrencyStore(baseDir string) *Currency {
-	return &Currency{
+func NewCurrencyStore(baseDir string) *CurrencyStore {
+	return &CurrencyStore{
 		baseDir: baseDir,
 	}
 }
 
-func (cs *Currency) Update(uid, currency string, amount float64) {
+func (cs *CurrencyStore) Update(uid, currency string, amount float64) {
 	val, loaded := cs.store.Load(currency)
 	if !loaded {
 		sfm := maps.NewSafeFloatMap()
@@ -59,7 +59,7 @@ func (cs *Currency) Update(uid, currency string, amount float64) {
 	sfm.Add(uid, amount)
 }
 
-func (cs *Currency) Get(uid, currency string) float64 {
+func (cs *CurrencyStore) Get(uid, currency string) float64 {
 	val, ok := cs.store.Load(currency)
 	if !ok {
 		return 0
@@ -68,7 +68,7 @@ func (cs *Currency) Get(uid, currency string) float64 {
 	return sfm.Get(uid)
 }
 
-func (cs *Currency) GetOrLoad(uid, currency string) (float64, error) {
+func (cs *CurrencyStore) GetOrLoad(uid, currency string) (float64, error) {
 	if _, ok := cs.store.Load(currency); !ok {
 		if err := cs.LoadCurrency(currency); err != nil {
 			return 0, err
@@ -77,7 +77,7 @@ func (cs *Currency) GetOrLoad(uid, currency string) (float64, error) {
 	return cs.Get(uid, currency), nil
 }
 
-func (cs *Currency) List() map[string]map[string]float64 {
+func (cs *CurrencyStore) List() map[string]map[string]float64 {
 	result := make(map[string]map[string]float64)
 	cs.store.Range(func(key, value any) bool {
 		currency := key.(string)
@@ -94,7 +94,7 @@ func (cs *Currency) List() map[string]map[string]float64 {
 	return result
 }
 
-func (cs *Currency) SaveSnapshot() error {
+func (cs *CurrencyStore) SaveSnapshot() error {
 	// 0755 是 linux 權限設置
 	if err := os.MkdirAll(cs.baseDir, 0755); err != nil {
 		return err
@@ -114,7 +114,7 @@ func (cs *Currency) SaveSnapshot() error {
 	return err
 }
 
-func (cs *Currency) RecoverFromSnapshot() error {
+func (cs *CurrencyStore) RecoverFromSnapshot() error {
 	if err := os.MkdirAll(cs.baseDir, 0755); err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (cs *Currency) RecoverFromSnapshot() error {
 	return nil
 }
 
-func (cs *Currency) LoadCurrency(currency string) error {
+func (cs *CurrencyStore) LoadCurrency(currency string) error {
 	path := filepath.Join(cs.baseDir, currency+".snapshot.gz")
 	result, err, _ := cs.sfGroup.Do(currency, func() (any, error) {
 		return loadCurrency(path)
@@ -169,7 +169,7 @@ func saveCurrency(path string, data map[string]float64) error {
 	return os.WriteFile(path, compressed, 0644)
 }
 
-func loadCurrency(path string) (*DataV2, error) {
+func loadCurrency(path string) (*StoreV2, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -185,13 +185,13 @@ func loadCurrency(path string) (*DataV2, error) {
 	//  snapshot 版本兼容
 	switch snapshot.Version {
 	case 1:
-		dataV1, ok := snapshot.Data.(*DataV1)
+		dataV1, ok := snapshot.Data.(*StoreV1)
 		if !ok {
 			return nil, fmt.Errorf("invalid data type for version 1 snapshot")
 		}
 		return migrateFromV1(dataV1)
 	case 2:
-		dataV2, ok := snapshot.Data.(*DataV2)
+		dataV2, ok := snapshot.Data.(*StoreV2)
 		if !ok {
 			return nil, fmt.Errorf("invalid data type for version 2 snapshot")
 		}
@@ -202,13 +202,13 @@ func loadCurrency(path string) (*DataV2, error) {
 }
 
 // 實作 migration 邏輯 for v1 ➔ current，假設目前是v2
-func migrateFromV1(oldData *DataV1) (*DataV2, error) {
+func migrateFromV1(oldData *StoreV1) (*StoreV2, error) {
 	if oldData == nil {
-		return &DataV2{}, nil
+		return &StoreV2{}, nil
 	}
-	var v2 DataV2
-	for k, v := range oldData.store {
-		v2.store = append(v2.store, struct {
+	var v2 StoreV2
+	for k, v := range oldData.Data {
+		v2.Data = append(v2.Data, struct {
 			key   string
 			value string
 		}{
