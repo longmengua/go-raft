@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -23,6 +24,14 @@ func New(addr []string, assethandler *asset.Handler) *HttpServer {
 
 func (hs *HttpServer) Start() error {
 	r := gin.Default()
+
+	// CORS middleware (放在最前面)
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"}, // 本地測試用，正式環境要限定
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-CSRF-Token"},
+		AllowCredentials: true,
+	}))
 
 	// 設置靜態文件服務
 	r.Static("/static", "./static")
