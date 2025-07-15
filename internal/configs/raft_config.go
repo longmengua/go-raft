@@ -5,7 +5,8 @@ const (
 	FileDir = "raft-snapshots"
 
 	// private
-	ClusterID   = 99
-	NodeID      = 1
-	RaftAddress = "localhost:5010"
+	ClusterID       = 99
+	NodeID          = 1
+	RaftAddress     = "localhost:5010"
+	SnapshotVersion = 1
 )

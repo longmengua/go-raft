@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"go-raft/internal/configs"
 	"go-raft/pkg/maps"
 	maps0 "maps"
 	"os"
@@ -35,7 +36,7 @@ type StoreV2 struct {
 	}
 }
 
-const currentSnapshotVersion = 1 // snapshot版控
+const currentSnapshotVersion = configs.SnapshotVersion // snapshot版控
 
 type SnapshotFile struct {
 	SnapshotVersion int
