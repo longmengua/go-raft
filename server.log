@@ -361,3 +361,21 @@ Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-
 [GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
 Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
 [GIN-debug] Listening and serving HTTP on 0.0.0.0:9090
+[GIN-debug] POST   /asset/add                --> go-raft/internal/adapters/http/asset.(*Handler).AddAsset-fm (6 handlers)
+[GIN-debug] GET    /asset/balance            --> go-raft/internal/adapters/http/asset.(*Handler).GetBalance-fm (6 handlers)
+[GIN-debug] GET    /asset/balances           --> go-raft/internal/adapters/http/asset.(*Handler).GetBalances-fm (6 handlers)
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+[GIN-debug] Listening and serving HTTP on 0.0.0.0:9090
+[GIN-debug] POST   /asset/add                --> go-raft/internal/adapters/http/asset.(*Handler).AddAsset-fm (6 handlers)
+[GIN-debug] GET    /asset/balance            --> go-raft/internal/adapters/http/asset.(*Handler).GetBalance-fm (6 handlers)
+[GIN-debug] GET    /asset/balances           --> go-raft/internal/adapters/http/asset.(*Handler).GetBalances-fm (6 handlers)
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+[GIN-debug] Listening and serving HTTP on 0.0.0.0:9090
+[GIN-debug] POST   /asset/add                --> go-raft/internal/adapters/http/asset.(*Handler).AddAsset-fm (6 handlers)
+[GIN-debug] GET    /asset/balance            --> go-raft/internal/adapters/http/asset.(*Handler).GetBalance-fm (6 handlers)
+[GIN-debug] GET    /asset/balances           --> go-raft/internal/adapters/http/asset.(*Handler).GetBalances-fm (6 handlers)
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+[GIN-debug] Listening and serving HTTP on 0.0.0.0:9090

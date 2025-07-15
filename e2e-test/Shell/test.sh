@@ -7,7 +7,7 @@ OUTPUT_FILE="statistic.csv"
 
 API_PATHS=(
   "/asset/add"
-  "/asset/balances"
+  # "/asset/balances"
 )
 
 echo "request_num,api_path,response_time_sec" > $OUTPUT_FILE

@@ -123,6 +123,26 @@ func (cs *CurrencyStore) SaveSnapshot() error {
 	return err
 }
 
+func (cs *CurrencyStore) RecoverFromSnapshot() error {
+	if err := os.MkdirAll(cs.baseDir, 0755); err != nil {
+		return err
+	}
+	files, err := os.ReadDir(cs.baseDir)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		if file.IsDir() || !strings.HasSuffix(file.Name(), ".snapshot.gz") {
+			continue
+		}
+		currency := strings.TrimSuffix(file.Name(), ".snapshot.gz")
+		if err := cs.LoadCurrency(currency); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (cs *CurrencyStore) CleanupOldSnapshots(retentionDays int) error {
 	files, err := os.ReadDir(cs.baseDir)
 	if err != nil {

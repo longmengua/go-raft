@@ -65,7 +65,8 @@ func (a *AssetConcurrentStateMachine) SaveSnapshot(_ any, w io.Writer, _ statema
 
 // 快照回復
 func (a *AssetConcurrentStateMachine) RecoverFromSnapshot(_ io.Reader, _ []statemachine.SnapshotFile, _ <-chan struct{}) error {
-	return a.store.RecoverFromSnapshot()
+	err := a.store.RecoverFromSnapshot()
+	return err
 }
 
 func (a *AssetConcurrentStateMachine) Close() error { return nil }
