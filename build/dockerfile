@@ -1,0 +1,38 @@
+# -------- 建置階段 --------
+FROM golang:1.23.0-alpine AS builder
+
+# 設定工作目錄為 /app
+WORKDIR /app
+
+# 複製依賴管理檔案並下載模組
+COPY go.mod go.sum ./
+RUN go mod download
+
+# 複製所有程式碼
+COPY . .
+
+# 透過 build-arg 注入 Git commit 短碼，編譯可執行檔
+ARG GIT_COMMIT=dev
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -trimpath -ldflags "-s -w -X main.gitCommit=${GIT_COMMIT}" \
+    -o app
+
+# -------- 運行階段 --------
+FROM alpine:latest
+
+# 安裝 ca-certificates，方便做 HTTPS 通信
+RUN apk add --no-cache ca-certificates
+
+# 建議提醒：Linux 宿主機需調整以下參數，確保 C10K 效能
+RUN echo "請確保宿主機已設定以下參數：" && \
+    echo "ulimit -n 1048576" && \
+    echo "sysctl -w net.core.somaxconn=65535"
+
+# 從 builder 階段複製編譯好的可執行檔
+COPY --from=builder /app/app /app
+
+# 開放容器 9090 埠口
+EXPOSE 9090
+
+# 啟動應用程式
+ENTRYPOINT ["/app"]

@@ -1,0 +1,19 @@
+# docker-compose.yml 範例，設定 ulimit 與 sysctl 調校，方便 C10K 運行
+
+services:
+  goapp:
+    build:
+      context: .
+      # 傳入 git commit 短碼，預設為 dev
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-dev}
+    ports:
+      - "9090:9090"
+    # 設定容器內檔案描述符限制（ulimit）
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    # 設定 Linux 核心參數 TCP backlog 上限
+    sysctls:
+      net.core.somaxconn: 65535
