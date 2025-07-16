@@ -3,6 +3,7 @@ package http
 import (
 	"fmt"
 	"go-raft/internal/adapters/http/asset"
+	"go-raft/internal/adapters/http/snapshot"
 	"log"
 	"time"
 
@@ -11,8 +12,9 @@ import (
 )
 
 type HttpServer struct {
-	Addr         []string
-	assethandler *asset.Handler
+	Addr            []string
+	assethandler    *asset.Handler
+	snapshothandler *snapshot.Handler
 }
 
 func New(addr []string, assethandler *asset.Handler) *HttpServer {
@@ -47,6 +49,10 @@ func (hs *HttpServer) Start() error {
 	r.POST("/asset/add", hs.assethandler.AddAsset)
 	r.GET("/asset/balance", hs.assethandler.GetBalance)
 	r.GET("/asset/balances", hs.assethandler.GetBalances)
+
+	// 切換 snapshot 版本號，滾動更新用
+	r.GET("/snapshot/version", hs.snapshothandler.GetSnapshotVersion)
+	r.POST("/snapshot/version", hs.snapshothandler.SetSnapshotVersion)
 
 	// 啟動HTTP服務器
 	r.Use(gin.Recovery())

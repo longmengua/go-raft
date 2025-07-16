@@ -36,7 +36,7 @@ type StoreV2 struct {
 	}
 }
 
-const currentSnapshotVersion = configs.SnapshotVersion
+var currentSnapshotVersion = configs.SnapshotVersion
 
 type SnapshotFile struct {
 	SnapshotVersion int
