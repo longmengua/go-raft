@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go-raft/internal/configs"
 	"go-raft/pkg/maps"
+	"log"
 	maps0 "maps"
 	"os"
 	"path/filepath"
@@ -239,6 +240,9 @@ func loadCurrency(path string) (map[string]float64, error) {
 	if err := gob.NewDecoder(bytes.NewReader(decompressed)).Decode(&snapshot); err != nil {
 		return nil, err
 	}
+	log.Println("===loadCurrency===")
+	log.Println(snapshot.SnapshotVersion)
+	log.Printf("%+v", snapshot.Data)
 	switch snapshot.SnapshotVersion {
 	case 1:
 		dataV1, ok := snapshot.Data.(*StoreV1)
@@ -265,6 +269,7 @@ func loadCurrency(path string) (map[string]float64, error) {
 	}
 }
 
+// 避免直接引用舊的結構體。保持記憶體隔離，確保新版本後續只用新的結構
 func migrateFromV1(oldData *StoreV1) (map[string]float64, error) {
 	if oldData == nil {
 		return map[string]float64{}, nil
