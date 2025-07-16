@@ -65,8 +65,8 @@ func New() (*RaftStore, error) {
 			ReplicaID:          configs.NodeID,    // 本節點的 Raft Replica ID (唯一)
 			ShardID:            configs.ClusterID, // 所屬的 Raft 群組 (Shard) ID
 			CheckQuorum:        true,              // 保護資料一致性，防止腦裂。
-			SnapshotEntries:    50000,             // 5萬條快照。太小 ➔ 快照太頻繁；太大 ➔ 重新啟動慢
-			CompactionOverhead: 2000,              // 2千條保留日誌。調太小會造成 follower 追不上，導致 full snapshot
+			SnapshotEntries:    200,               // 5萬條快照。太小 ➔ 快照太頻繁；太大 ➔ 重新啟動慢
+			CompactionOverhead: 50,                // 2千條保留日誌。調太小會造成 follower 追不上，導致 full snapshot
 			MaxInMemLogSize:    4 * 1024 * 1024,   // 4MB。太小會導致頻繁 snapshot & 日誌丟磁碟
 		},
 	)

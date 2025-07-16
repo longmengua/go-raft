@@ -107,13 +107,13 @@ func (cs *CurrencyStore) SaveSnapshot() error {
 	if err := os.MkdirAll(cs.baseDir, 0755); err != nil {
 		return err
 	}
-	today := time.Now().Format("20060102")
+	// today := time.Now().Format("20060102")
 	var err error
 	cs.store.Range(func(key, value any) bool {
 		currency := key.(string)
 		sfm := value.(*maps.SafeFloatMap)
 		data := sfm.Snapshot()
-		path := filepath.Join(cs.baseDir, fmt.Sprintf("%s_%s.snapshot.gz", currency, today))
+		path := filepath.Join(cs.baseDir, fmt.Sprintf("%s.snapshot.gz", currency))
 		if e := saveCurrency(path, data); e != nil {
 			err = e
 			return false
@@ -170,28 +170,7 @@ func (cs *CurrencyStore) CleanupOldSnapshots(retentionDays int) error {
 }
 
 func (cs *CurrencyStore) LoadCurrency(currency string) error {
-	files, err := os.ReadDir(cs.baseDir)
-	if err != nil {
-		return err
-	}
-	latestDate := ""
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-		prefix := currency + "_"
-		if strings.HasPrefix(file.Name(), prefix) && strings.HasSuffix(file.Name(), ".snapshot.gz") {
-			dateStr := strings.TrimSuffix(strings.TrimPrefix(file.Name(), prefix), ".snapshot.gz")
-			if len(dateStr) == 8 && dateStr > latestDate {
-				latestDate = dateStr
-			}
-		}
-	}
-	if latestDate == "" {
-		return fmt.Errorf("no snapshot found for currency: %s", currency)
-	}
-
-	filename := fmt.Sprintf("%s_%s.snapshot.gz", currency, latestDate)
+	filename := fmt.Sprintf("%s.snapshot.gz", currency)
 	path := filepath.Join(cs.baseDir, filename)
 
 	result, err, _ := cs.sfGroup.Do(path, func() (any, error) {
