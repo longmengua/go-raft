@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"go-raft/internal/configs"
 	"go-raft/pkg/maps"
 	"log"
 	maps0 "maps"
@@ -36,7 +35,8 @@ type StoreV2 struct {
 	}
 }
 
-var currentSnapshotVersion = configs.SnapshotVersion
+// 能交由 API 管理，為了rolling update 不同資料結構用。
+var CurrentSnapshotVersion = 1
 
 type SnapshotFile struct {
 	SnapshotVersion int
@@ -196,12 +196,13 @@ func (cs *CurrencyStore) LoadCurrency(currency string) error {
 func saveCurrency(path string, data map[string]float64) error {
 	buf := new(bytes.Buffer)
 	var snapshot SnapshotFile
-	if currentSnapshotVersion == 1 {
+	if CurrentSnapshotVersion == 1 {
 		snapshot = SnapshotFile{
 			SnapshotVersion: 1,
 			Data:            &StoreV1{Data: data},
 		}
-	} else {
+	}
+	if CurrentSnapshotVersion == 2 {
 		var arr []struct {
 			Key   string
 			Value string
@@ -220,6 +221,8 @@ func saveCurrency(path string, data map[string]float64) error {
 			Data:            &StoreV2{Data: arr},
 		}
 	}
+	log.Println("===saveCurrency===")
+	log.Printf("snapshot version: %d, current snapshot version: %d", snapshot.SnapshotVersion, CurrentSnapshotVersion)
 	if err := gob.NewEncoder(buf).Encode(snapshot); err != nil {
 		return err
 	}
@@ -241,8 +244,7 @@ func loadCurrency(path string) (map[string]float64, error) {
 		return nil, err
 	}
 	log.Println("===loadCurrency===")
-	log.Println(snapshot.SnapshotVersion)
-	log.Printf("%+v", snapshot.Data)
+	log.Printf("snapshot version: %d, current snapshot version: %d", snapshot.SnapshotVersion, CurrentSnapshotVersion)
 	switch snapshot.SnapshotVersion {
 	case 1:
 		dataV1, ok := snapshot.Data.(*StoreV1)

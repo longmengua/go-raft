@@ -1,7 +1,7 @@
 package snapshot
 
 import (
-	"go-raft/internal/configs"
+	"go-raft/internal/store"
 	"net/http"
 	"strconv"
 
@@ -28,10 +28,10 @@ func (h *Handler) SetSnapshotVersion(c *gin.Context) {
 		return
 	}
 
-	configs.SnapshotVersion = versionInt
+	store.CurrentSnapshotVersion = versionInt
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "version": versionInt})
 }
 
 func (h *Handler) GetSnapshotVersion(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "version": configs.SnapshotVersion})
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "version": store.CurrentSnapshotVersion})
 }
