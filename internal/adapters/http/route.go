@@ -17,10 +17,11 @@ type HttpServer struct {
 	snapshothandler *snapshot.Handler
 }
 
-func New(addr []string, assethandler *asset.Handler) *HttpServer {
+func New(addr []string, assethandler *asset.Handler, snapshothandler *snapshot.Handler) *HttpServer {
 	return &HttpServer{
-		Addr:         addr,
-		assethandler: assethandler,
+		Addr:            addr,
+		assethandler:    assethandler,
+		snapshothandler: snapshothandler,
 	}
 }
 

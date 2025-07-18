@@ -4,6 +4,8 @@ import (
 	"context"
 	"go-raft/internal/adapters/http"
 	"go-raft/internal/adapters/http/asset"
+	"go-raft/internal/adapters/http/snapshot"
+	"go-raft/internal/configs"
 	"go-raft/internal/raft"
 	"log"
 	"os"
@@ -16,16 +18,23 @@ func main() {
 	defer stop()
 
 	// Initialize the Raft store
-	raftstore, err := raft.New()
+	defaultCfg := raft.NodeConfig{
+		FileDir:     configs.FileDir,
+		RaftAddress: configs.RaftAddress,
+		NodeID:      configs.NodeID,
+		ClusterID:   configs.ClusterID,
+	}
+	raftstore, err := raft.New(defaultCfg)
 	if err != nil {
 		log.Fatalf("failed to start replica: %v", err)
 	}
 
 	// Initialize all hanlders
 	assethandler := asset.NewHanlder(raftstore.NodeHost, raftstore.ClusterID)
+	snapshothandler := snapshot.NewHanlder()
 
 	// [::1]:19090 for ipv6
-	httpserver := http.New([]string{"0.0.0.0:9090"}, assethandler)
+	httpserver := http.New([]string{"0.0.0.0:9090"}, assethandler, snapshothandler)
 	go func() {
 		if err := httpserver.Start(); err != nil {
 			log.Fatalf("failed to start HTTP server: %v", err)

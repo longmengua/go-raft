@@ -1,9 +1,8 @@
 package snapshot
 
 import (
-	"go-raft/internal/store"
+	"go-raft/internal/configs"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,16 +21,10 @@ func (h *Handler) SetSnapshotVersion(c *gin.Context) {
 		return
 	}
 
-	versionInt, err := strconv.Atoi(req.Version)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid version number"})
-		return
-	}
-
-	store.CurrentSnapshotVersion = versionInt
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "version": versionInt})
+	configs.SetSnapshotVersion(req.NodeID, req.ShardID, req.Version)
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "versionInfo": req})
 }
 
 func (h *Handler) GetSnapshotVersion(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "version": store.CurrentSnapshotVersion})
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "version": configs.GetSnapshotVersions()})
 }
