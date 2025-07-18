@@ -3,7 +3,6 @@ package raft
 import (
 	"bytes"
 	"encoding/gob"
-	"go-raft/internal/configs"
 	"go-raft/internal/domain"
 	"go-raft/internal/store"
 	"io"
@@ -20,8 +19,7 @@ type AssetRaftMachine struct {
 var _ statemachine.IStateMachine = (*AssetRaftMachine)(nil)
 
 func NewAssetRaftMachine() statemachine.IStateMachine {
-	cs := store.NewCurrencyStore(configs.FileDir)
-	_ = cs.RecoverFromSnapshot() // 嘗試從磁碟載入
+	cs := store.NewCurrencyStore()
 	return &AssetRaftMachine{store: cs}
 }
 
@@ -45,13 +43,13 @@ func (a *AssetRaftMachine) Lookup(query interface{}) (interface{}, error) {
 func (a *AssetRaftMachine) SaveSnapshot(w io.Writer, _ statemachine.ISnapshotFileCollection, _ <-chan struct{}) error {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return a.store.SaveSnapshot()
+	return a.store.SaveSnapshot(w)
 }
 
-func (a *AssetRaftMachine) RecoverFromSnapshot(_ io.Reader, _ []statemachine.SnapshotFile, _ <-chan struct{}) error {
+func (a *AssetRaftMachine) RecoverFromSnapshot(r io.Reader, _ []statemachine.SnapshotFile, stop <-chan struct{}) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.store.RecoverFromSnapshot()
+	return a.store.RecoverFromSnapshot(r, stop)
 }
 
 func (a *AssetRaftMachine) Close() error { return nil }

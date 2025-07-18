@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"go-raft/internal/configs"
 	"go-raft/internal/domain"
 	"go-raft/internal/store"
 	"io"
@@ -19,8 +18,7 @@ type AssetConcurrentStateMachine struct {
 var _ statemachine.IConcurrentStateMachine = (*AssetConcurrentStateMachine)(nil)
 
 func NewAssetRaftConcurrentMachine() statemachine.IConcurrentStateMachine {
-	cs := store.NewCurrencyStore(configs.FileDir)
-	_ = cs.RecoverFromSnapshot() // 嘗試從磁碟載入
+	cs := store.NewCurrencyStore()
 	return &AssetConcurrentStateMachine{store: cs}
 }
 
@@ -56,16 +54,13 @@ func (a *AssetConcurrentStateMachine) Lookup(query any) (any, error) {
 
 // 快照儲存
 func (a *AssetConcurrentStateMachine) SaveSnapshot(_ any, w io.Writer, _ statemachine.ISnapshotFileCollection, _ <-chan struct{}) error {
-	err := a.store.SaveSnapshot()
-	if err == nil {
-		err = a.store.CleanupOldSnapshots(7)
-	}
+	err := a.store.SaveSnapshot(w)
 	return err
 }
 
 // 快照回復
-func (a *AssetConcurrentStateMachine) RecoverFromSnapshot(_ io.Reader, _ []statemachine.SnapshotFile, _ <-chan struct{}) error {
-	err := a.store.RecoverFromSnapshot()
+func (a *AssetConcurrentStateMachine) RecoverFromSnapshot(r io.Reader, _ []statemachine.SnapshotFile, stop <-chan struct{}) error {
+	err := a.store.RecoverFromSnapshot(r, stop)
 	return err
 }
 

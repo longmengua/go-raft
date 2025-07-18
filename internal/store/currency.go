@@ -3,16 +3,15 @@ package store
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"fmt"
-	"go-raft/pkg/maps"
-	"log"
-	maps0 "maps"
-	"os"
-	"path/filepath"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
+
+	"go-raft/pkg/maps"
+	maps0 "maps"
 
 	"github.com/golang/snappy"
 	"golang.org/x/sync/singleflight"
@@ -35,7 +34,6 @@ type StoreV2 struct {
 	}
 }
 
-// 能交由 API 管理，為了rolling update 不同資料結構用。
 var CurrentSnapshotVersion = 1
 
 type SnapshotFile struct {
@@ -44,26 +42,21 @@ type SnapshotFile struct {
 }
 
 type CurrencyStore struct {
-	baseDir string
 	store   sync.Map
 	sfGroup singleflight.Group
 }
 
-func NewCurrencyStore(baseDir string) *CurrencyStore {
-	return &CurrencyStore{baseDir: baseDir}
+func NewCurrencyStore() *CurrencyStore {
+	return &CurrencyStore{}
 }
 
 func (cs *CurrencyStore) Update(uid, currency string, amount float64) {
 	val, loaded := cs.store.Load(currency)
 	if !loaded {
 		sfm := maps.NewSafeFloatMap()
-		err := cs.LoadCurrency(currency)
-		if err != nil {
-			cs.store.Store(currency, sfm)
-			sfm.Add(uid, amount)
-			return
-		}
-		val, _ = cs.store.Load(currency)
+		cs.store.Store(currency, sfm)
+		sfm.Add(uid, amount)
+		return
 	}
 	sfm := val.(*maps.SafeFloatMap)
 	sfm.Add(uid, amount)
@@ -76,15 +69,6 @@ func (cs *CurrencyStore) Get(uid, currency string) float64 {
 	}
 	sfm := val.(*maps.SafeFloatMap)
 	return sfm.Get(uid)
-}
-
-func (cs *CurrencyStore) GetOrLoad(uid, currency string) (float64, error) {
-	if _, ok := cs.store.Load(currency); !ok {
-		if err := cs.LoadCurrency(currency); err != nil {
-			return 0, err
-		}
-	}
-	return cs.Get(uid, currency), nil
 }
 
 func (cs *CurrencyStore) List() map[string]map[string]float64 {
@@ -104,174 +88,86 @@ func (cs *CurrencyStore) List() map[string]map[string]float64 {
 	return result
 }
 
-func (cs *CurrencyStore) SaveSnapshot() error {
-	if err := os.MkdirAll(cs.baseDir, 0755); err != nil {
-		return err
-	}
-	// today := time.Now().Format("20060102")
-	var err error
-	cs.store.Range(func(key, value any) bool {
-		currency := key.(string)
-		sfm := value.(*maps.SafeFloatMap)
-		data := sfm.Snapshot()
-		path := filepath.Join(cs.baseDir, fmt.Sprintf("%s.snapshot.gz", currency))
-		if e := saveCurrency(path, data); e != nil {
-			err = e
-			return false
-		}
-		return true
-	})
-	return err
-}
-
-func (cs *CurrencyStore) RecoverFromSnapshot() error {
-	if err := os.MkdirAll(cs.baseDir, 0755); err != nil {
-		return err
-	}
-	files, err := os.ReadDir(cs.baseDir)
-	if err != nil {
-		return err
-	}
-	for _, file := range files {
-		if file.IsDir() || !strings.HasSuffix(file.Name(), ".snapshot.gz") {
-			continue
-		}
-		currency := strings.TrimSuffix(file.Name(), ".snapshot.gz")
-		if err := cs.LoadCurrency(currency); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (cs *CurrencyStore) CleanupOldSnapshots(retentionDays int) error {
-	files, err := os.ReadDir(cs.baseDir)
-	if err != nil {
-		return err
-	}
-	cutoff := time.Now().AddDate(0, 0, -retentionDays)
-	for _, file := range files {
-		if file.IsDir() || !strings.HasSuffix(file.Name(), ".snapshot.gz") {
-			continue
-		}
-		parts := strings.Split(file.Name(), "_")
-		if len(parts) != 2 {
-			continue
-		}
-		dateStr := strings.TrimSuffix(parts[1], ".snapshot.gz")
-		t, err := time.Parse("20060102", dateStr)
-		if err != nil {
-			continue
-		}
-		if t.Before(cutoff) {
-			os.Remove(filepath.Join(cs.baseDir, file.Name()))
-		}
-	}
-	return nil
-}
-
-func (cs *CurrencyStore) LoadCurrency(currency string) error {
-	filename := fmt.Sprintf("%s.snapshot.gz", currency)
-	path := filepath.Join(cs.baseDir, filename)
-
-	result, err, _ := cs.sfGroup.Do(path, func() (any, error) {
-		return loadCurrency(path)
-	})
-	if err != nil {
-		return err
-	}
-	newData := result.(map[string]float64)
-	val, loaded := cs.store.Load(currency)
-	if loaded {
-		sfm := val.(*maps.SafeFloatMap)
-		sfm.LoadData(newData)
-	} else {
-		sfm := maps.NewSafeFloatMap()
-		sfm.LoadData(newData)
-		cs.store.Store(currency, sfm)
-	}
-	return nil
-}
-
-func saveCurrency(path string, data map[string]float64) error {
+func (cs *CurrencyStore) SaveSnapshot(w io.Writer) error {
+	data := cs.List()
 	buf := new(bytes.Buffer)
-	var snapshot SnapshotFile
-	if CurrentSnapshotVersion == 1 {
-		snapshot = SnapshotFile{
-			SnapshotVersion: 1,
-			Data:            &StoreV1{Data: data},
-		}
+	snapshot := SnapshotFile{
+		SnapshotVersion: CurrentSnapshotVersion,
+		Data:            &StoreV1{Data: flatten(data)},
 	}
-	if CurrentSnapshotVersion == 2 {
-		var arr []struct {
-			Key   string
-			Value string
-		}
-		for k, v := range data {
-			arr = append(arr, struct {
-				Key   string
-				Value string
-			}{
-				Key:   k,
-				Value: fmt.Sprintf("%f", v),
-			})
-		}
-		snapshot = SnapshotFile{
-			SnapshotVersion: 2,
-			Data:            &StoreV2{Data: arr},
-		}
-	}
-	log.Println("===saveCurrency===")
-	log.Printf("snapshot version: %d, current snapshot version: %d", snapshot.SnapshotVersion, CurrentSnapshotVersion)
 	if err := gob.NewEncoder(buf).Encode(snapshot); err != nil {
 		return err
 	}
 	compressed := snappy.Encode(nil, buf.Bytes())
-	return os.WriteFile(path, compressed, 0644)
+	_, err := w.Write(compressed)
+	return err
 }
 
-func loadCurrency(path string) (map[string]float64, error) {
-	raw, err := os.ReadFile(path)
+func (cs *CurrencyStore) RecoverFromSnapshot(r io.Reader, stopc <-chan struct{}) error {
+	raw, err := io.ReadAll(r)
 	if err != nil {
-		return nil, err
+		return err
+	}
+	select {
+	case <-stopc:
+		return errors.New("snapshot load stopped")
+	default:
 	}
 	decompressed, err := snappy.Decode(nil, raw)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var snapshot SnapshotFile
 	if err := gob.NewDecoder(bytes.NewReader(decompressed)).Decode(&snapshot); err != nil {
-		return nil, err
+		return err
 	}
-	log.Println("===loadCurrency===")
-	log.Printf("snapshot version: %d, current snapshot version: %d", snapshot.SnapshotVersion, CurrentSnapshotVersion)
+	var merged map[string]float64
 	switch snapshot.SnapshotVersion {
 	case 1:
 		dataV1, ok := snapshot.Data.(*StoreV1)
 		if !ok {
-			return nil, fmt.Errorf("invalid data type for version 1 snapshot")
+			return errors.New("invalid data type for version 1")
 		}
-		return migrateFromV1(dataV1)
+		merged, _ = migrateFromV1(dataV1)
 	case 2:
 		dataV2, ok := snapshot.Data.(*StoreV2)
 		if !ok {
-			return nil, fmt.Errorf("invalid data type for version 2 snapshot")
+			return errors.New("invalid data type for version 2")
 		}
-		m := make(map[string]float64)
+		merged = make(map[string]float64)
 		for _, kv := range dataV2.Data {
 			v, err := strconv.ParseFloat(kv.Value, 64)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			m[kv.Key] = v
+			merged[kv.Key] = v
 		}
-		return m, nil
 	default:
-		return nil, fmt.Errorf("unsupported snapshot version %d", snapshot.SnapshotVersion)
+		return fmt.Errorf("unsupported snapshot version %d", snapshot.SnapshotVersion)
 	}
+	cs.store = sync.Map{}
+	for k, v := range merged {
+		parts := strings.Split(k, "::")
+		if len(parts) != 2 {
+			continue
+		}
+		uid, currency := parts[0], parts[1]
+		cs.Update(uid, currency, v)
+	}
+	return nil
 }
 
-// 避免直接引用舊的結構體。保持記憶體隔離，確保新版本後續只用新的結構
+func flatten(data map[string]map[string]float64) map[string]float64 {
+	result := make(map[string]float64)
+	for uid, currencies := range data {
+		for currency, value := range currencies {
+			key := fmt.Sprintf("%s::%s", uid, currency)
+			result[key] = value
+		}
+	}
+	return result
+}
+
 func migrateFromV1(oldData *StoreV1) (map[string]float64, error) {
 	if oldData == nil {
 		return map[string]float64{}, nil
