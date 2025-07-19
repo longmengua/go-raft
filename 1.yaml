@@ -1,0 +1,27 @@
+server:
+  host: "localhost"
+  port: 8081
+
+fsm:
+  version: 1 # 預設使用格式版本 1（延遲切換可用 API）
+
+raft:
+  node_id: 1
+  raft_address: "localhost:50101"
+  wal_dir: "./raft-snapshots/1/wal"
+  node_host_dir: "./raft-snapshots/1/nodehost"
+
+shards:
+  0:
+    1: "localhost:50101"
+    2: "localhost:50102"
+
+  100:
+    1: "localhost:50101"
+    2: "localhost:50102"
+    3: "localhost:50103"
+
+  200:
+    2: "localhost:50102"
+    3: "localhost:50103"
+    4: "localhost:50104"

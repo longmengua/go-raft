@@ -1,6 +1,9 @@
 ## snapshots
-**/raft-snapshots
+**/raft-snapshots/**
 **/wal
 **/**.csv
 server.log
-config.yaml
+
+# yaml
+!config_example.yaml
+# *.yaml

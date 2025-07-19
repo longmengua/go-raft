@@ -28,7 +28,7 @@ GEN_GRPC := $(BIN_DIR)/protoc-gen-go-grpc
 
 # 啟動應用程式
 dev:  
-	go run cmd/main.go
+	go run cmd/main.go --config=$(CONFIG)
 
 # 安裝依賴
 init:  

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"go-raft/internal/adapters/http"
 	"go-raft/internal/adapters/http/asset"
@@ -17,7 +18,10 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	cfg, err := configs.ParseConfigFile("config.yaml")
+	configPath := flag.String("config", "config.yaml", "Path to config YAML file")
+	flag.Parse()
+
+	cfg, err := configs.ParseConfigFile(*configPath)
 	if err != nil {
 		fmt.Println("解析 config 失敗:", err)
 		return
