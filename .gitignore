@@ -2,3 +2,4 @@
 **/raft-snapshots
 **/wal
 **/**.csv
+server.log
