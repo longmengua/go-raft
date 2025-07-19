@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"go-raft/internal/configs"
 	"go-raft/internal/domain"
 	"go-raft/internal/store"
 	"io"
@@ -12,7 +13,9 @@ import (
 )
 
 type AssetConcurrentStateMachine struct {
-	store *store.CurrencyStore
+	nodeID    uint64
+	clusterID uint64
+	store     *store.CurrencyStore
 }
 
 var _ statemachine.IConcurrentStateMachine = (*AssetConcurrentStateMachine)(nil)
@@ -22,7 +25,7 @@ func NewAssetRaftConcurrentMachine(
 	nodeID uint64,
 ) statemachine.IConcurrentStateMachine {
 	cs := store.NewCurrencyStore(clusterID, nodeID)
-	return &AssetConcurrentStateMachine{store: cs}
+	return &AssetConcurrentStateMachine{store: cs, clusterID: clusterID, nodeID: nodeID}
 }
 
 // 批次更新
@@ -88,5 +91,6 @@ func (a *AssetConcurrentStateMachine) Close() error {
 func (a *AssetConcurrentStateMachine) PrepareSnapshot() (any, error) {
 	// 假設 store 有版本號 (Version)，用來標識目前狀態
 	// 如果沒有版本控制，可以回傳 nil，表示無特殊標識
-	return nil, nil
+	version := configs.GetSnapshotVersion(a.nodeID, a.clusterID)
+	return version, nil
 }

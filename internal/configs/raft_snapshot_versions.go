@@ -14,7 +14,10 @@ func GetSnapshotVersions() map[string]uint64 {
 
 func GetSnapshotVersion(nodeID, shardID uint64) uint64 {
 	key := getKey(nodeID, shardID)
-	return Versions[key]
+	if v, ok := Versions[key]; ok {
+		return v
+	}
+	return 1 // 預設為 snapshot version 1
 }
 
 func SetSnapshotVersion(nodeID, shardID, version uint64) uint64 {

@@ -7,25 +7,33 @@ import (
 	"github.com/lni/dragonboat/v4/config"
 	"github.com/lni/dragonboat/v4/logger"
 	"github.com/lni/dragonboat/v4/statemachine"
+	"github.com/sirupsen/logrus"
 )
 
 type RaftStore struct {
-	NodeHost    *dragonboat.NodeHost
-	ClusterID   uint64
-	NodeID      uint64
-	FileDir     string
-	RaftAddress string
+	NodeHost       *dragonboat.NodeHost // Dragonboat 實例，管理 Raft 節點與集群
+	NodeID         uint64               // 本節點 ID
+	ClusterID      uint64               // 集群 ID
+	FileDir        string               // 紀錄檔案與 WAL 儲存的路徑
+	RaftAddress    string               // Raft 傳輸的位址
+	Join           bool                 //
+	initialMembers map[uint64]string
 }
 
 // Config 定義啟動 NodeHost 的參數
+// 用來初始化 RaftStore 所需的設定值
 type NodeConfig struct {
-	FileDir     string
-	RaftAddress string
-	NodeID      uint64
-	ClusterID   uint64
+	FileDir        string // 紀錄檔案與 WAL 儲存的目錄
+	RaftAddress    string // Raft 傳輸的位址 (host:port)
+	NodeID         uint64 // 節點 ID
+	ClusterID      uint64 // 集群 ID
+	Join           bool   //
+	InitialMembers map[uint64]string
 }
 
-// New 支援傳入多節點參數來建立 RaftStore
+// New 建立 RaftStore 實例，支援多節點參數傳入
+//
+// 例如：
 //
 //	defaultCfg := raft.NodeConfig{
 //		FileDir:     configs.FileDir,
@@ -33,74 +41,58 @@ type NodeConfig struct {
 //		NodeID:      configs.NodeID,
 //		ClusterID:   configs.ClusterID,
 //	}
-func New(cfg NodeConfig) (*RaftStore, error) {
+func New(nc NodeConfig) (*RaftStore, error) {
 	logger.GetLogger("raft").SetLevel(logger.DEBUG)
 
 	nh, err := dragonboat.NewNodeHost(config.NodeHostConfig{
-		WALDir:         cfg.FileDir,
-		NodeHostDir:    cfg.FileDir,
-		RaftAddress:    cfg.RaftAddress,
+		WALDir:         nc.FileDir,
+		NodeHostDir:    nc.FileDir,
+		RaftAddress:    nc.RaftAddress,
 		RTTMillisecond: 200,
-		Expert: config.ExpertConfig{
-			LogDB: config.LogDBConfig{
-				Shards:                             8,
-				KVKeepLogFileNum:                   10,
-				KVMaxBackgroundCompactions:         4,
-				KVMaxBackgroundFlushes:             2,
-				KVLRUCacheSize:                     64 * 1024 * 1024,
-				KVWriteBufferSize:                  64 * 1024 * 1024,
-				KVMaxWriteBufferNumber:             3,
-				KVLevel0FileNumCompactionTrigger:   4,
-				KVLevel0SlowdownWritesTrigger:      8,
-				KVLevel0StopWritesTrigger:          12,
-				KVMaxBytesForLevelBase:             256 * 1024 * 1024,
-				KVMaxBytesForLevelMultiplier:       10,
-				KVTargetFileSizeBase:               64 * 1024 * 1024,
-				KVTargetFileSizeMultiplier:         1,
-				KVLevelCompactionDynamicLevelBytes: 1,
-				KVRecycleLogFileNum:                2,
-				KVNumOfLevels:                      7,
-				KVBlockSize:                        4096,
-				SaveBufferSize:                     64 * 1024,
-				MaxSaveBufferSize:                  256 * 1024,
-			},
-		},
+		Expert:         config.ExpertConfig{ /*你的設定*/ },
 	})
-
 	if err != nil {
 		return nil, err
 	}
 
-	// 多個時候，下面為 for 產生。
-	err = nh.StartConcurrentReplica(
-		map[uint64]string{cfg.NodeID: cfg.RaftAddress},
-		false,
+	log.Printf("NodeHost started at %s (NodeID %d, ClusterID %d)\n", nc.RaftAddress, nc.NodeID, nc.ClusterID)
+
+	return &RaftStore{
+		NodeHost:       nh,
+		FileDir:        nc.FileDir,
+		RaftAddress:    nc.RaftAddress,
+		NodeID:         nc.NodeID,
+		ClusterID:      nc.ClusterID,
+		Join:           nc.Join,
+		initialMembers: nc.InitialMembers,
+	}, nil
+}
+
+func (rs *RaftStore) Start() error {
+	logrus.WithFields(logrus.Fields{"Join": rs.Join}).Info("Start")
+
+	var initialMembers map[uint64]string
+	if !rs.Join {
+		// 只有 Leader 需要 InitialMembers
+		initialMembers = rs.initialMembers // 從 RaftStore 中取得
+	} else {
+		initialMembers = nil // Join 模式不需要
+	}
+
+	return rs.NodeHost.StartConcurrentReplica(
+		initialMembers, // ✅ 正確傳入 cluster 成員
+		rs.Join,
 		func(clusterID, nodeID uint64) statemachine.IConcurrentStateMachine {
 			return NewAssetRaftConcurrentMachine(clusterID, nodeID)
 		},
 		config.Config{
-			ElectionRTT:        30,
-			HeartbeatRTT:       2,
-			ReplicaID:          cfg.NodeID,
-			ShardID:            cfg.ClusterID,
+			ElectionRTT:        10,
+			HeartbeatRTT:       1,
+			ReplicaID:          rs.NodeID,
+			ShardID:            rs.ClusterID,
 			CheckQuorum:        true,
-			SnapshotEntries:    200,
-			CompactionOverhead: 50,
-			MaxInMemLogSize:    4 * 1024 * 1024,
+			SnapshotEntries:    10,
+			CompactionOverhead: 5,
 		},
 	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	log.Printf("Raft Node Started at %s with cluster %d, node %d\n", cfg.RaftAddress, cfg.ClusterID, cfg.NodeID)
-
-	return &RaftStore{
-		NodeHost:    nh,
-		ClusterID:   cfg.ClusterID,
-		FileDir:     cfg.FileDir,
-		NodeID:      cfg.NodeID,
-		RaftAddress: cfg.RaftAddress,
-	}, nil
 }
