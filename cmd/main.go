@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"go-raft/internal/adapters/http"
 	"go-raft/internal/adapters/http/asset"
+	"go-raft/internal/configs"
 	"go-raft/internal/raft"
 	"log"
 	"os"
@@ -15,14 +17,21 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	cfg, err := configs.ParseConfigFile("config.yaml")
+	if err != nil {
+		fmt.Println("解析 config 失敗:", err)
+		return
+	}
+
 	// Initialize the Raft store
-	raftstore, err := raft.New()
+	raftstore := raft.New(&cfg.Raft, &cfg.Shards)
+	err = raftstore.Start()
 	if err != nil {
 		log.Fatalf("failed to start replica: %v", err)
 	}
 
 	// Initialize all hanlders
-	assethandler := asset.NewHanlder(raftstore.NodeHost, raftstore.ClusterID)
+	assethandler := asset.NewHanlder(raftstore.NodeHost, raftstore.RaftCfg.ClusterID)
 
 	// [::1]:19090 for ipv6
 	httpserver := http.New([]string{"0.0.0.0:9090"}, assethandler)

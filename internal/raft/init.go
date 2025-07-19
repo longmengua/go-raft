@@ -2,7 +2,6 @@ package raft
 
 import (
 	"go-raft/internal/configs"
-	"log"
 
 	"github.com/lni/dragonboat/v4"
 	"github.com/lni/dragonboat/v4/config"
@@ -12,17 +11,21 @@ import (
 
 type RaftStore struct {
 	NodeHost  *dragonboat.NodeHost
-	ClusterID uint64
+	RaftCfg   *configs.RaftConfig
+	ShardsCfg *map[uint64]map[uint64]string
 }
 
-func New() (*RaftStore, error) {
-	logger.GetLogger("raft").SetLevel(logger.DEBUG)
+func New(
+	RaftCfg *configs.RaftConfig,
+	ShardsCfg *map[uint64]map[uint64]string,
+) *RaftStore {
+	logger.GetLogger("raft").SetLevel(logger.INFO)
 
 	nh, err := dragonboat.NewNodeHost(config.NodeHostConfig{
-		WALDir:         configs.FileDir,     // WAL(日誌寫前日誌)的存放目錄，建議使用低延遲存儲裝置
-		NodeHostDir:    configs.FileDir,     // NodeHost 其他資料(快照、狀態等)的存放目錄
-		RaftAddress:    configs.RaftAddress, // 本節點 Raft 通訊地址 (IP:Port)
-		RTTMillisecond: 200,                 // 節點間平均往返延遲時間 (ms)，用於調整心跳和選舉時間
+		WALDir:         RaftCfg.WALDir,      // WAL(日誌寫前日誌)的存放目錄，建議使用低延遲存儲裝置
+		NodeHostDir:    RaftCfg.NodeHostDir, // NodeHost 其他資料(快照、狀態等)的存放目錄
+		RaftAddress:    RaftCfg.RaftAddress, // 本節點 Raft 通訊地址 (IP:Port)
+		RTTMillisecond: 100,                 // 節點間平均往返延遲時間 (ms)，用於調整心跳和選舉時間
 		Expert: config.ExpertConfig{
 			LogDB: config.LogDBConfig{
 				Shards:                             8,                 // LogDB shard 數量，提高並行度和吞吐量。增加 shards 數可以讓 LogDB 有更好的並行處理能力，但也會佔用更多資源。一般8-16是合理範圍。
@@ -50,33 +53,43 @@ func New() (*RaftStore, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
-	err = nh.StartConcurrentReplica(
-		map[uint64]string{configs.NodeID: configs.RaftAddress},
-		false,
-		func(clusterID, nodeID uint64) statemachine.IConcurrentStateMachine {
-			return NewAssetRaftConcurrentMachine()
-		},
-		config.Config{
-			ElectionRTT:        30,                // 6秒選舉超時 (RTT=200ms)。更長的選舉超時。太小 ➔ 容易腦裂；太大 ➔ Failover 慢
-			HeartbeatRTT:       2,                 // 400ms 心跳。保持心跳頻率。太小 ➔ 浪費頻寬；太大 ➔ Failover 變慢
-			ReplicaID:          configs.NodeID,    // 本節點的 Raft Replica ID (唯一)
-			ShardID:            configs.ClusterID, // 所屬的 Raft 群組 (Shard) ID
-			CheckQuorum:        true,              // 保護資料一致性，防止腦裂。
-			SnapshotEntries:    200,               // 5萬條快照。太小 ➔ 快照太頻繁；太大 ➔ 重新啟動慢
-			CompactionOverhead: 50,                // 2千條保留日誌。調太小會造成 follower 追不上，導致 full snapshot
-			MaxInMemLogSize:    4 * 1024 * 1024,   // 4MB。太小會導致頻繁 snapshot & 日誌丟磁碟
-		},
-	)
-	if err != nil {
-		return nil, err
+	return &RaftStore{NodeHost: nh, RaftCfg: RaftCfg, ShardsCfg: ShardsCfg}
+}
+
+func (rs *RaftStore) Start() error {
+	if rs.ShardsCfg == nil {
+		panic("RaftStore.Start.ShardsCfg is nil!")
 	}
 
-	log.Printf("Raft Node Started at %s with cluster %d, node %d\n", configs.RaftAddress, configs.ClusterID, configs.NodeID)
-	return &RaftStore{
-		NodeHost:  nh,
-		ClusterID: configs.ClusterID,
-	}, nil
+	for _, peers := range *rs.ShardsCfg {
+		if addr, ok := peers[rs.RaftCfg.NodeID]; !ok || addr != rs.RaftCfg.RaftAddress {
+			continue
+		}
+		// 本機要加入此 cluster
+		err := rs.NodeHost.StartConcurrentReplica(
+			peers,
+			false,
+			func(clusterID, nodeID uint64) statemachine.IConcurrentStateMachine {
+				return NewAssetRaftConcurrentMachine()
+			},
+			config.Config{
+				ElectionRTT:        30,                   // 6秒選舉超時 (RTT=200ms)。更長的選舉超時。太小 ➔ 容易腦裂；太大 ➔ Failover 慢
+				HeartbeatRTT:       2,                    // 400ms 心跳。保持心跳頻率。太小 ➔ 浪費頻寬；太大 ➔ Failover 變慢
+				ReplicaID:          rs.RaftCfg.NodeID,    // 本節點的 Raft Replica ID (唯一)
+				ShardID:            rs.RaftCfg.ClusterID, // 所屬的 Raft 群組 (Shard) ID
+				CheckQuorum:        true,                 // 保護資料一致性，防止腦裂。
+				SnapshotEntries:    200,                  // 5萬條快照。太小 ➔ 快照太頻繁；太大 ➔ 重新啟動慢
+				CompactionOverhead: 50,                   // 2千條保留日誌。調太小會造成 follower 追不上，導致 full snapshot
+				MaxInMemLogSize:    4 * 1024 * 1024,      // 4MB。太小會導致頻繁 snapshot & 日誌丟磁碟
+			},
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
