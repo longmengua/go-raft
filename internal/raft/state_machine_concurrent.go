@@ -18,7 +18,7 @@ type AssetConcurrentStateMachine struct {
 var _ statemachine.IConcurrentStateMachine = (*AssetConcurrentStateMachine)(nil)
 
 func NewAssetRaftConcurrentMachine() statemachine.IConcurrentStateMachine {
-	cs := store.NewCurrencyStore()
+	cs := store.NewCurrencyStore(1)
 	return &AssetConcurrentStateMachine{store: cs}
 }
 
@@ -43,6 +43,9 @@ func (a *AssetConcurrentStateMachine) Lookup(query any) (any, error) {
 		// 查單一使用者幣別餘額
 		return a.store.Get(q.UID, q.Currency), nil
 	case string:
+		if q == "version" {
+			return a.store.GetVersion(), nil
+		}
 		if q == "list" {
 			result := a.store.List()
 			// log.Printf("Returning list data: %+v", result) // 添加日誌

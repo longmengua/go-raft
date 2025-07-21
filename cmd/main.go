@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go-raft/internal/adapters/http"
 	"go-raft/internal/adapters/http/asset"
+	"go-raft/internal/adapters/http/snapshot"
 	"go-raft/internal/configs"
 	"go-raft/internal/raft"
 	"log"
@@ -36,9 +37,10 @@ func main() {
 
 	// Initialize all hanlders
 	assethandler := asset.NewHanlder(raftstore.NodeHost, raftstore.RaftCfg.ClusterID)
+	snapshothandler := snapshot.NewHanlder(raftstore.NodeHost, raftstore.RaftCfg.ClusterID)
 
 	// [::1]:19090 for ipv6
-	httpserver := http.New([]string{"0.0.0.0:9090"}, assethandler)
+	httpserver := http.New([]string{"0.0.0.0:9090"}, assethandler, snapshothandler)
 	go func() {
 		if err := httpserver.Start(); err != nil {
 			log.Fatalf("failed to start HTTP server: %v", err)

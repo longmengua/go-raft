@@ -14,7 +14,6 @@ import (
 	maps0 "maps"
 
 	"github.com/golang/snappy"
-	"golang.org/x/sync/singleflight"
 )
 
 func init() {
@@ -34,8 +33,6 @@ type StoreV2 struct {
 	}
 }
 
-var CurrentSnapshotVersion = 1
-
 type SnapshotFile struct {
 	SnapshotVersion int
 	Data            any
@@ -43,11 +40,11 @@ type SnapshotFile struct {
 
 type CurrencyStore struct {
 	store   sync.Map
-	sfGroup singleflight.Group
+	version int
 }
 
-func NewCurrencyStore() *CurrencyStore {
-	return &CurrencyStore{}
+func NewCurrencyStore(version int) *CurrencyStore {
+	return &CurrencyStore{version: version}
 }
 
 func (cs *CurrencyStore) Update(uid, currency string, amount float64) {
@@ -60,6 +57,15 @@ func (cs *CurrencyStore) Update(uid, currency string, amount float64) {
 	}
 	sfm := val.(*maps.SafeFloatMap)
 	sfm.Add(uid, amount)
+}
+
+func (cs *CurrencyStore) SetVersion(version int) int {
+	cs.version = version
+	return version
+}
+
+func (cs *CurrencyStore) GetVersion() int {
+	return cs.version
 }
 
 func (cs *CurrencyStore) Get(uid, currency string) float64 {
@@ -92,7 +98,7 @@ func (cs *CurrencyStore) SaveSnapshot(w io.Writer) error {
 	data := cs.List()
 	buf := new(bytes.Buffer)
 	snapshot := SnapshotFile{
-		SnapshotVersion: CurrentSnapshotVersion,
+		SnapshotVersion: cs.version,
 		Data:            &StoreV1{Data: flatten(data)},
 	}
 	if err := gob.NewEncoder(buf).Encode(snapshot); err != nil {

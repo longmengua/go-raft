@@ -19,7 +19,7 @@ type AssetRaftMachine struct {
 var _ statemachine.IStateMachine = (*AssetRaftMachine)(nil)
 
 func NewAssetRaftMachine() statemachine.IStateMachine {
-	cs := store.NewCurrencyStore()
+	cs := store.NewCurrencyStore(1)
 	return &AssetRaftMachine{store: cs}
 }
 
